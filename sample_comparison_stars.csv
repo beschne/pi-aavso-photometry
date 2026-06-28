@@ -1,0 +1,7 @@
+AUID,RA,Dec,Label,Band,Mag,Error,Comments
+000-BBW-796,15:58:28.42,25:56:30.9,98,V,9.809,0.023,HD 143256 - ORG - Ampl. 0.003 TESS.
+000-BBW-796,15:58:28.42,25:56:30.9,98,B,10.843,0.027,HD 143256 - ORG - Ampl. 0.003 TESS.
+000-BBW-796,15:58:28.42,25:56:30.9,98,Rc,9.269,0.032,HD 143256 - ORG - Ampl. 0.003 TESS.
+000-BBW-779,15:57:40.02,26:06:18.8,102,V,10.167,0.01,"Combined magnitude of a 10.21 and 13.75 Vmag. pair 8"" apart. Include both stars in your aperture."
+000-BBW-779,15:57:40.02,26:06:18.8,102,B,10.753,0.048,"Combined magnitude of a 10.21 and 13.75 Vmag. pair 8"" apart. Include both stars in your aperture."
+000-BBW-779,15:57:40.02,26:06:18.8,102,Rc,9.825,0.021,"Combined magnitude of a 10.21 and 13.75 Vmag. pair 8"" apart. Include both stars in your aperture."
