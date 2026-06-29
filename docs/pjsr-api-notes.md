@@ -40,6 +40,38 @@ Pattern:
 
 Verify current property names for both the input star list and the PSF output columns (amplitude, background, sigma/FWHM, flux, MAD/residual) against the installed version.
 
+### PSF model choice for photometry: Gaussian only, not Auto
+
+The script uses `autoPSF = false` with `gaussianPSF = true`. **Do not switch to `autoPSF = true`** for photometry, even though the PixInsight GUI defaults to Auto.
+
+**Why Auto is wrong for differential photometry:**
+
+When `autoPSF = true`, DynamicPSF tries Gaussian + several Moffat variants and picks the best-fitting model per star. That is useful for PSF analysis but harmful for photometry: the model can differ between the target and the comp star, making the flux values not directly comparable.
+
+**Why Gaussian is correct here:**
+
+1. **MERR formula validity.** The matched-filter noise formula used in `psfMagError()` —
+   `σ_A = σ_pix × √(2 / (π · sx · sy))` — is derived for a 2D Gaussian PSF. It gives
+   wrong noise estimates for a Moffat fit.
+
+2. **Systematic cancellation.** The flux proxy `A × sx × sy` (with the 2π constant
+   dropping out in the magnitude difference) is consistent only when both target and
+   comp are fitted with the same model. Any Gaussian-model bias cancels in
+   `instMag_T − instMag_C`.
+
+3. **Adequate accuracy.** For a stacked master (20+ frames, typical amateur seeing)
+   the PSF is well sampled and close to Gaussian. Moffat fits mainly help for
+   undersampled or saturated stars — neither of which passes the quality filters anyway.
+
+**Configuration used:**
+
+```js
+DPSF.autoPSF       = false;
+DPSF.gaussianPSF   = true;
+DPSF.moffatPSF     = false;   // and all other Moffat variants false
+DPSF.lorentzianPSF = false;
+```
+
 ## File dialogs
 
 ```js

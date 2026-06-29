@@ -113,6 +113,8 @@ At peak brightness the faint comp stars in X42597QE are still measurable — the
 
 `psf.mad` is the mean absolute deviation of the Gaussian fit residuals across the pixels in the fitting box (returned by DynamicPSF). $A$, $\sigma_x$, $\sigma_y$ are the fitted amplitude and Gaussian widths.
 
+**The formula is valid only for a Gaussian PSF model.** This is why `autoPSF = false` and `gaussianPSF = true` in the script — see `docs/pjsr-api-notes.md` § *PSF model choice for photometry*.
+
 $$\sigma_\text{pix} = \frac{\text{MAD}}{0.6745}$$
 
 For Gaussian noise, $\text{MAD} = 0.6745\,\sigma$, so this recovers the per-pixel noise standard deviation.
