@@ -111,9 +111,11 @@ TODO.md                      Build checklist and roadmap
 - Ensemble photometry
 - TG→V transformation
 
-<img src="docs/astrophotography%20and%20photometry%20meme.png" width="800"/>
-
 ## Author
+
+<br/><br/>
+
+<img src="docs/astrophotography%20and%20photometry%20meme.png" width="800"/>
 
 Benno Schneider · AAVSO observer code **BSLA**
 
