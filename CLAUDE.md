@@ -28,7 +28,7 @@ them externally.
 
 - **GitHub repository:** `pi-photometry`. Future PixInsight scripts get their own `pi-…` repos.
 - **PixInsight menu category:** `BeSchne` (for Benno Schneider). Feature header: `#feature-id BeSchne > Photometry`.
-- **File name:** `beschne-photometry.js` — lower-case, hyphenated, not target-specific.
+- **File name:** `aavso-photometry.js` — lower-case, hyphenated, not target-specific.
 - **Settings namespace:** `BeSchne/<Script>/<key>`, e.g. `BeSchne/Photometry/comparisonCsvPath`.
 - **Human-facing strings** (TITLE/VERSION constants, dialog title): "AAVSO Photometry".
 
@@ -36,7 +36,7 @@ them externally.
 
 | File | Purpose |
 | ---- | ------- |
-| `beschne-photometry.js` | The script. Runs on the active image window; locates T CrB via the plate solve; measures it against CSV comparison stars; writes an AAVSO Extended report. |
+| `aavso-photometry.js` | The script. Runs on the active image window; locates T CrB via the plate solve; measures it against CSV comparison stars; writes an AAVSO Extended report. |
 | `sample_comparison_stars.csv` | Format sample for the comparison-star CSV (two stars, multiple bands). |
 | `docs/X42597QE_photometry.csv` | Reference copy of the AAVSO VSP export for chart X42597QE. |
 | `docs/X42597QE.png` | AAVSO finder chart for T CrB, chart X42597QE. |
@@ -44,7 +44,7 @@ them externally.
 ## Running and development
 
 **Development loop (no install, no restart):**
-Edit `beschne-photometry.js` in a normal editor, save, then in PixInsight:
+Edit `aavso-photometry.js` in a normal editor, save, then in PixInsight:
 `Script > Execute Script File…` → select the file. It is re-read from disk on every
 run. Debug output goes to the Process Console (`console.writeln()`); errors print
 there with line numbers.

@@ -1,4 +1,4 @@
-# beschne-photometry.js — Build Checklist
+# aavso-photometry.js — Build Checklist
 
 ## 1. Script skeleton
 - [x] Feature header (`#feature-id BeSchne > Photometry`, `#feature-info`, optional `#feature-icon`)

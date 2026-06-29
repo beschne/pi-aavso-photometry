@@ -33,7 +33,7 @@ FITS keywords, and DynamicPSF — rather than reimplementing them externally.
 No installation or restart required during development:
 
 1. Open PixInsight with your master light stack as the active window.
-2. `Script > Execute Script File…` → select `beschne-photometry.js`.
+2. `Script > Execute Script File…` → select `aavso-photometry.js`.
 
 The file is re-read from disk on every run. Debug output goes to the Process Console.
 
@@ -43,7 +43,7 @@ once. PixInsight registers it under `Script > BeSchne > Photometry`.
 ## Usage
 
 1. Open a **linear, plate-solved** OSC master stack in PixInsight.
-2. Run the script. The **BeSchne Photometry** dialog opens.
+2. Run the script. The **AAVSO Photometry** dialog opens.
 3. Verify the active image shown at the top.
 4. Choose (or confirm) the **comparison-star CSV** path.
 5. Click **Run Photometry**. The script fits PSFs and derives the T CrB magnitude.
@@ -80,7 +80,7 @@ See `sample_comparison_stars.csv` for the expected column layout and
 ## Repository layout
 
 ```
-beschne-photometry.js        Main script
+aavso-photometry.js        Main script
 sample_comparison_stars.csv  Format sample for the comparison-star CSV
 docs/
   X42597QE_photometry.csv    AAVSO VSP export for chart X42597QE
