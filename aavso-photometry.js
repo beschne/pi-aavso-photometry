@@ -752,8 +752,10 @@ class PhotometryDialog extends Dialog {
       imageLblTag.setFixedWidth( 110 );
 
       this.imageLbl = new Label( this );
+      this.imageLbl.useRichText = true;
       this.imageLbl.text = (_window && !_window.isNull)
-         ? _window.mainView.id : "(no active window)";
+         ? _window.mainView.id
+         : "<font color='#cc2222'>(no active window)</font>";
 
       var imageRow = new HorizontalSizer;
       imageRow.spacing = 8;
@@ -1357,6 +1359,8 @@ class PhotometryDialog extends Dialog {
          checkWriteEnabled();
 
          _window = ImageWindow.activeWindow;
+         if ( !_window || _window.isNull )
+            throw new Error( "No active image window. Open a plate-solved OSC stack and make it the active window first." );
 
          // Check FITS HISTORY keywords for forbidden processes
          var forbidden = detectForbiddenHistory( _window );
@@ -1417,7 +1421,7 @@ class PhotometryDialog extends Dialog {
          // Astrometry
          var metadata = loadAstrometry( _window );
          var image    = _window.mainView.image;
-         self.imageLbl.text = _window.mainView.id;
+         self.imageLbl.text = _window.mainView.id;   // clears red "(no active window)" if shown
          console.writeln( "Astrometric solution loaded (" +
                           image.width + " x " + image.height + " px)." );
          console.writeln( format( "Observer site: lat %ls°  lon %ls°  elev %ls m  (%ls)",
