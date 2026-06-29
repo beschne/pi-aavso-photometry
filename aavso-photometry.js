@@ -734,6 +734,9 @@ class PhotometryDialog extends Dialog {
       var precon3 = new Label( this );
       precon3.text = "✓  Safe to apply: background extraction (ABE/DBE/GradientCorrection), SPCC.";
 
+      var precon4 = new Label( this );
+      precon4.text = "ℹ  Save your master stack to disk before running to enable full process-history detection.";
+
       this.warningLbl = new Label( this );
       this.warningLbl.useRichText = true;
       this.warningLbl.visible     = false;
@@ -1366,6 +1369,7 @@ class PhotometryDialog extends Dialog {
       this.sizer.add( precon1          );
       this.sizer.add( precon2          );
       this.sizer.add( precon3          );
+      this.sizer.add( precon4          );
       this.sizer.add( this.warningLbl   );
       this.sizer.add( this.linearityLbl );
 

@@ -61,7 +61,7 @@
 - [x] **Forbidden-process detection — robustness** (current check only covers saved FITS `HISTORY` keywords; in-memory stacks after `ImageIntegration` are a blind spot):
   - [x] Warn if `view.historyIndex > 0` when no forbidden HISTORY keyword found ("image modified this session — verify linearity")
   - [x] Supplement with green-channel median heuristic: linear master typically < 0.05; stretched image typically > 0.15
-  - [ ] Nudge user to save master stack before running (so HISTORY keywords are present) — covered by historyIndex warning text; no separate UI element needed
+  - [x] Nudge user to save master stack before running (so HISTORY keywords are present) — static precondition line in the dialog
 - [ ] Annotated verification image (thumbnail with target + comp/check marked)
 - [ ] Check-star gate: warn if (K−C) deviation exceeds threshold before writing
 - [x] Real `MERR`: Poisson + sky-background noise (PSF MAD residuals propagated via matched-filter formula)
