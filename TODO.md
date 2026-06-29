@@ -55,7 +55,7 @@
 
 ---
 
-## Roadmap items (not in scope for v1)
+## Roadmap items in scope for v1
 
 - [x] Selectable comp/check stars in the dialog at runtime (Comp/Check label edit fields, persisted)
 - [x] **Forbidden-process detection — robustness** (current check only covers saved FITS `HISTORY` keywords; in-memory stacks after `ImageIntegration` are a blind spot):
@@ -65,10 +65,6 @@
 - [ ] Annotated verification image (thumbnail with target + comp/check marked)
 - [ ] Check-star gate: warn if (K−C) deviation exceeds threshold before writing
 - [x] Real `MERR`: Poisson + sky-background noise (PSF MAD residuals propagated via matched-filter formula)
-- [ ] Ensemble photometry (`CNAME=ENSEMBLE`)
-- [ ] User-specifiable target star
-- [ ] TG→V transformation (`TRANS=YES`)
-- [ ] Multiband TB/TG (blue channel)
 
 ### Security audit (needed before 1.0.0)
 - [ ] **Input validation** — validate all user-editable fields (lat/lon/elev, time fields, manual mid-time) before use; reject or clamp out-of-range values
@@ -91,3 +87,10 @@
 - [ ] **README: troubleshooting** — common errors and fixes (no active window, plate solve missing, star outside frame, PSF rejected)
 - [ ] **README: outburst strategy summary** — when to switch comp/check labels and where to get a new chart (condense from `docs/domain-knowledge.md`)
 - [ ] **README: known limitations** — TG ≠ V (systematic offset for red stars), Seestar FOV constraint at nova peak
+
+## Roadmap items not in scope for v1
+
+- [ ] Ensemble photometry (`CNAME=ENSEMBLE`)
+- [ ] User-specifiable target star
+- [ ] TG→V transformation (`TRANS=YES`)
+- [ ] Multiband TB/TG (blue channel)
