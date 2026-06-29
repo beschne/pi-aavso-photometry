@@ -663,7 +663,7 @@ class PhotometryDialog extends Dialog {
             var lon = parseFloat( self.lonEdit.text );
             if ( !isNaN(lat) && !isNaN(lon) ) {
                var mAlt = moonAltitude( mid, lat, lon );
-               self.moonLbl.text = mp + "% · "
+               self.moonLbl.text = mp + "%, "
                   + format( "%.0f°", Math.abs(mAlt) )
                   + (mAlt >= 0 ? " above horizon" : " below horizon");
             } else {
