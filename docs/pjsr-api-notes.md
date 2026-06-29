@@ -123,6 +123,47 @@ inst.close();
 
 Verify the exact constructor signatures, the `open()` argument list, and whether `keywords` is the correct property name for the installed version.
 
+## XISF image properties
+
+XISF image properties are distinct from FITS keywords and are accessed via the `View` object:
+
+```js
+// List all property IDs on the active view (returns array of strings)
+var ids = view.properties;   // e.g. ["Image:Id", "PCL:TotalExposureTime", ...]
+
+// Read a specific property value
+var val = view.propertyValue( "PCL:TotalExposureTime" );
+```
+
+**Key properties found on a Seestar OSC master-light stack (PI 1.9.4):**
+
+| Property ID | Type | Example value | Notes |
+|---|---|---|---|
+| `Instrument:FrameExposureTime` | Float64 | `30` | Seconds per sub |
+| `PCL:TotalExposureTime` | Float64 array | `[554.575,532.567,480.99]` | Per-channel total; channels vary due to rejection |
+| `Observation:Time:Start` | String | ISO-8601 | Same as `DATE-OBS` FITS keyword |
+| `Observation:Time:End` | String | ISO-8601 | Same as `DATE-END` FITS keyword |
+
+**`PCL:TotalExposureTime` is a per-channel array.** `propertyValue()` returns it as a Variant whose string form is `[R,G,B]`. Parse with:
+
+```js
+var totNums = String( val ).replace( /[\[\]\s]/g, '' )
+                .split( ',' ).map( parseFloat )
+                .filter( function(x) { return !isNaN(x); } );
+var maxTot = Math.max.apply( null, totNums );
+```
+
+**Deriving frame count:**
+
+```js
+var totalExp = view.propertyValue( "PCL:TotalExposureTime" );
+var frameExp = view.propertyValue( "Instrument:FrameExposureTime" );
+// parse totalExp array as above, then:
+var frames = Math.round( maxTot / parseFloat( String( frameExp ) ) );
+```
+
+**`PixInsight:ProcessingHistory` is NOT loaded into the in-memory view.** It exists in the XISF file on disk (accessible via Python/XML parsing) but `view.propertyValue("PixInsight:ProcessingHistory")` returns `null`. Do not rely on it from PJSR.
+
 ## Settings persistence
 
 Requires `#include <pjsr/DataType.jsh>` — the `DataType_*` constants are not automatically in scope.

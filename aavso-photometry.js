@@ -482,6 +482,56 @@ function computeAirmass( jdUT, lat_deg, lon_deg, ra_deg, dec_deg ) {
    return 1.0 / (sinAlt + 0.50572 * Math.pow( altDeg + 6.07995, -1.6364 ));
 }
 
+// Returns lunar illuminated fraction as an integer percentage (0–100).
+// Known new moon: JD 2451549.5 (2000 Jan 6). Synodic period: 29.53058867 d.
+function moonPhase( jd ) {
+   var phase = ((jd - 2451549.5) % 29.53058867 + 29.53058867) % 29.53058867;
+   return Math.round( (1 - Math.cos( 2 * Math.PI * phase / 29.53058867 )) / 2 * 100 );
+}
+
+// Returns Moon altitude above the horizon in degrees (negative = below).
+// Simplified Meeus Ch. 47 ecliptic coordinates, accurate to ~1°.
+function moonAltitude( jd, lat_deg, lon_deg ) {
+   var d2r = Math.PI / 180;
+   var D   = jd - 2451545.0;
+   var Lp  = ((218.316 + 13.176396  * D) % 360 + 360) % 360;
+   var M   = ((357.529 +  0.9856003 * D) % 360 + 360) % 360;
+   var Mp  = ((134.963 + 13.064993  * D) % 360 + 360) % 360;
+   var Dm  = ((297.850 + 12.190749  * D) % 360 + 360) % 360;
+   var F   = (( 93.272 + 13.229350  * D) % 360 + 360) % 360;
+   var lam = Lp
+           + 6.289 * Math.sin( Mp      * d2r )
+           + 1.274 * Math.sin( (2*Dm - Mp) * d2r )
+           + 0.658 * Math.sin(  2*Dm   * d2r )
+           + 0.214 * Math.sin(  2*Mp   * d2r )
+           - 0.186 * Math.sin(  M      * d2r )
+           - 0.114 * Math.sin(  2*F    * d2r );
+   var bet = 5.128 * Math.sin(  F          * d2r )
+           + 0.280 * Math.sin( (Mp + F)    * d2r )
+           + 0.277 * Math.sin( (Mp - F)    * d2r )
+           + 0.173 * Math.sin( (2*Dm - F)  * d2r )
+           + 0.055 * Math.sin( (2*Dm - Mp + F) * d2r )
+           - 0.046 * Math.sin( (2*Dm - Mp - F) * d2r );
+   var eps = (23.439 - 0.0000004 * D) * d2r;
+   var lam_r = lam * d2r;
+   var bet_r = bet * d2r;
+   var ra  = Math.atan2( Math.sin(lam_r) * Math.cos(eps) - Math.tan(bet_r) * Math.sin(eps),
+                         Math.cos(lam_r) );
+   ra = ((ra / d2r) % 360 + 360) % 360;
+   var dec = Math.asin( Math.sin(bet_r) * Math.cos(eps)
+                      + Math.cos(bet_r) * Math.sin(eps) * Math.sin(lam_r) );
+   var T    = D / 36525.0;
+   var GMST = 280.46061837 + 360.98564736629 * D + 0.000387933 * T * T - (T*T*T) / 38710000.0;
+   GMST     = ((GMST % 360) + 360) % 360;
+   var LST  = ((GMST + lon_deg) % 360 + 360) % 360;
+   var H    = LST - ra;
+   if ( H >  180 ) H -= 360;
+   if ( H < -180 ) H += 360;
+   var sinAlt = Math.sin( lat_deg * d2r ) * Math.sin( dec )
+              + Math.cos( lat_deg * d2r ) * Math.cos( dec ) * Math.cos( H * d2r );
+   return Math.asin( sinAlt ) / d2r;
+}
+
 // ============================================================
 // Observer site coordinates
 // ============================================================
@@ -592,6 +642,7 @@ class PhotometryDialog extends Dialog {
             self.midJDLbl.text   = "—";
             self.midISOLbl.text  = "—";
             self.airmassLbl.text = "—";
+            self.moonLbl.text    = "—";
          } else {
             self.midJDLbl.text  = format( "%.6f", mid );
             self.midISOLbl.text = jdToISO( mid ) + " UTC";
@@ -606,6 +657,17 @@ class PhotometryDialog extends Dialog {
                } catch ( e ) {
                   self.airmassLbl.text = "below horizon";
                }
+            }
+            var mp = moonPhase( mid );
+            var lat = parseFloat( self.latEdit.text );
+            var lon = parseFloat( self.lonEdit.text );
+            if ( !isNaN(lat) && !isNaN(lon) ) {
+               var mAlt = moonAltitude( mid, lat, lon );
+               self.moonLbl.text = mp + "% · "
+                  + format( "%.0f°", Math.abs(mAlt) )
+                  + (mAlt >= 0 ? " above horizon" : " below horizon");
+            } else {
+               self.moonLbl.text = mp + "%";
             }
          }
          checkWriteEnabled();
@@ -817,8 +879,8 @@ class PhotometryDialog extends Dialog {
             if ( isNaN(expSec) || expSec <= 0 )
                throw new Error( "EXPTIME missing or zero — cannot compute End time.\nEnter End manually." );
             var endJD = lastStartJD + expSec / 86400.0;
-            self.endEdit.text    = jdToISO( endJD );
-            self.exptimeLbl.text = format( "%.1f s / sub", expSec );
+            self.endEdit.text     = jdToISO( endJD );
+            self.exptimeEdit.text = format( "%.1f", expSec );
             applyEnd( endJD );
          } catch ( e ) {
             new MessageBox( String(e.message || e), TITLE, StdIcon.Warning, StdButton.Ok ).execute();
@@ -882,18 +944,29 @@ class PhotometryDialog extends Dialog {
       endRow.addStretch();
 
       // ---- Exposure row ----
-      var exptimeTag = new Label( this );
-      exptimeTag.text          = "Exposure:";
-      exptimeTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
-      exptimeTag.setFixedWidth( 90 );
+      var framesTag = new Label( this );
+      framesTag.text          = "Frames:";
+      framesTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+      framesTag.setFixedWidth( 90 );
 
-      this.exptimeLbl = new Label( this );
-      this.exptimeLbl.text = "—";
+      this.framesEdit = new Edit( this );
+      this.framesEdit.setFixedWidth( 60 );
+      this.framesEdit.toolTip = "Number of integrated subframes (from PixInsight processing history)";
+
+      var exptimeTag = new Label( this );
+      exptimeTag.text          = "Exp/sub:";
+      exptimeTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+
+      this.exptimeEdit = new Edit( this );
+      this.exptimeEdit.setFixedWidth( 80 );
+      this.exptimeEdit.toolTip = "Exposure time per subframe in seconds (from last-sub EXPTIME)";
 
       var exptimeRow = new HorizontalSizer;
       exptimeRow.spacing = 8;
+      exptimeRow.add( framesTag );
+      exptimeRow.add( this.framesEdit );
       exptimeRow.add( exptimeTag );
-      exptimeRow.add( this.exptimeLbl );
+      exptimeRow.add( this.exptimeEdit );
       exptimeRow.addStretch();
 
       // ---- Mid-time mode radios ----
@@ -1039,6 +1112,21 @@ class PhotometryDialog extends Dialog {
       airmassRow.add( airmassTag );
       airmassRow.add( this.airmassLbl );
       airmassRow.addStretch();
+
+      var moonTag = new Label( this );
+      moonTag.text          = "Moon:";
+      moonTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+      moonTag.setFixedWidth( 90 );
+
+      this.moonLbl = new Label( this );
+      this.moonLbl.text    = "—";
+      this.moonLbl.toolTip = "Lunar illuminated fraction and altitude above/below horizon at mid-exposure time";
+
+      var moonRow = new HorizontalSizer;
+      moonRow.spacing = 8;
+      moonRow.add( moonTag );
+      moonRow.add( this.moonLbl );
+      moonRow.addStretch();
 
       // ============================================================
       // Output file
@@ -1220,6 +1308,7 @@ class PhotometryDialog extends Dialog {
       this.sizer.add( midISORow   );
       this.sizer.add( siteRow     );
       this.sizer.add( airmassRow  );
+      this.sizer.add( moonRow     );
 
       // Output
       this.sizer.add( hSep()             );
@@ -1268,6 +1357,33 @@ class PhotometryDialog extends Dialog {
          if ( siteKw.lon  !== null ) self.lonEdit.text  = format( "%.4f", siteKw.lon  );
          self.elevEdit.text = ( siteKw.elev !== null )
             ? format( "%.0f", siteKw.elev ) : ( self.elevEdit.text || "0" );
+
+         // Read stack metadata from FITS keywords.
+         var _kws   = _window.keywords;
+         var expFits = findKeyword( _kws, "EXPTIME" );
+
+         // Frame count: PCL:TotalExposureTime / Instrument:FrameExposureTime (both in seconds).
+         // Falls back to NCOMBINE FITS keyword for non-PixInsight stacks.
+         var _mv       = _window.mainView;
+         var _totalExp = _mv.propertyValue( "PCL:TotalExposureTime" );
+         var _frameExp = _mv.propertyValue( "Instrument:FrameExposureTime" );
+         if ( _totalExp !== null && _frameExp !== null ) {
+            // TotalExposureTime is a per-channel array e.g. [554.575,532.567,480.99]
+            var _totNums = String( _totalExp ).replace( /[\[\]\s]/g, '' )
+                              .split( ',' ).map( parseFloat )
+                              .filter( function(x) { return !isNaN(x); } );
+            var _maxTot = _totNums.length ? Math.max.apply( null, _totNums ) : NaN;
+            var _n = Math.round( _maxTot / parseFloat( String( _frameExp ) ) );
+            if ( _n > 0 ) self.framesEdit.text = String( _n );
+         }
+         if ( !self.framesEdit.text ) {
+            var _nc = findKeyword( _kws, "NCOMBINE" );
+            if ( _nc ) self.framesEdit.text = _nc;
+         }
+         if ( expFits && !self.exptimeEdit.text ) {
+            var expVal = parseFloat( expFits );
+            if ( !isNaN(expVal) ) self.exptimeEdit.text = format( "%.1f", expVal );
+         }
 
          if ( !_csvPath || !File.exists( _csvPath ) )
             throw new Error( "Comparison CSV not found — use Browse to select it." );
@@ -1424,7 +1540,15 @@ class PhotometryDialog extends Dialog {
             }
          }
          var kmag  = (_instMag_K !== null) ? format( "%.4f", _instMag_K ) : "na";
-         var notes = "TG green channel; DynamicPSF; comp " + COMP.label + "; check " + CHECK.label;
+         var stackInfo = "";
+         var framesVal  = self.framesEdit.text.trim();
+         var exptimeVal = self.exptimeEdit.text.trim();
+         if ( framesVal  ) stackInfo += framesVal + " frames";
+         if ( exptimeVal ) stackInfo += (stackInfo ? " x " : "") + exptimeVal + "s";
+         var moonVal = self.moonLbl.text !== "—" ? "moon " + self.moonLbl.text : "";
+         var notes = "TG green channel; DynamicPSF; comp " + COMP.label + "; check " + CHECK.label
+                   + (stackInfo ? "; " + stackInfo : "")
+                   + (moonVal   ? "; " + moonVal   : "");
 
          _reportText = self.rbHuman.checked
             ? buildHumanReport( midJD, amassStr, kmag, notes )
@@ -1437,6 +1561,10 @@ class PhotometryDialog extends Dialog {
          function kv( key, val ) {
             return (key + ":                   ").slice( 0, 20 ) + val;
          }
+         var framesVal  = self.framesEdit.text.trim();
+         var exptimeVal = self.exptimeEdit.text.trim();
+         var stackStr   = framesVal  ? framesVal + " frames" : "—";
+         if ( exptimeVal ) stackStr += " × " + exptimeVal + " s";
          var bar = "=".repeat( 52 );
          return [
             bar,
@@ -1450,6 +1578,8 @@ class PhotometryDialog extends Dialog {
             kv( "Date (UTC)",      jdToISO( midJD )                                  ),
             kv( "Date (JD)",       format( "%.6f", midJD )                            ),
             kv( "Airmass",         amassStr                                           ),
+            kv( "Moon",            self.moonLbl.text                                  ),
+            kv( "Stack",           stackStr                                            ),
             "",
             kv( "Comparison star", "label " + COMP.label  + " / " + COMP.auid  +
                                    " / V = " + format( "%.3f", COMP.magV  )          ),
