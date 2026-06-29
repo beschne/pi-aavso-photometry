@@ -741,7 +741,7 @@ function createVerificationImage( win, targetPix, compStar, compPix, checkStar, 
       if ( tempW ) tempW.forceClose();
    }
 
-   if ( !thumbBmp ) return;
+   if ( !thumbBmp ) return null;
 
    // Draw annotation circles and labels on the bitmap.
    var g = new Graphics( thumbBmp );
@@ -772,14 +772,7 @@ function createVerificationImage( win, targetPix, compStar, compPix, checkStar, 
 
    g.end();
 
-   // Create and display the annotated ImageWindow in the foreground.
-   var outW = new ImageWindow( thumbBmp.width, thumbBmp.height, 3, 8, false, true, "Verification" );
-   outW.mainView.beginProcess( UndoFlag_NoSwapFile );
-   outW.mainView.image.blend( thumbBmp );
-   outW.mainView.endProcess();
-   outW.show();
-   outW.zoomToFit();
-   outW.bringToFront();
+   return thumbBmp;
 }
 
 // ============================================================
@@ -791,30 +784,63 @@ class PhotometryDialog extends Dialog {
       super();
 
       this.windowTitle = TITLE;
-      this.minWidth    = 560;
+      this.minWidth    = 860;
 
       var self = this;
 
       // ---- Internal state ----
       var _photDone   = false;
-      var _compStar   = null;   // set by runPhotometry(); used by generateReport()
+      var _compStar   = null;
       var _checkStar  = null;
-      var _csvUsable  = [];     // sorted non-blended V-band stars; drives the ComboBoxes
+      var _csvUsable  = [];
       var _startJD    = NaN;
-      var _endJD     = NaN;
-      var _midMode   = 0;       // 0=(Start+End)/2  1=Start  2=Manual
-      var _window    = ImageWindow.activeWindow;
-      var _csvPath   = Settings.read( SETTINGS_CSV, DataType_String ) || "";
-      var _tcrb_mag  = NaN;
-      var _merr      = NaN;
-      var _instMag_T   = null;
-      var _instMag_C   = null;
-      var _instMag_K       = null;  // null = check star not available
-      var _checkGateWarn   = false; // true when check-star deviation > 3×MERR
-      var _reportText  = "";        // last generated report text; "" = not yet created
+      var _endJD      = NaN;
+      var _midMode    = 0;       // 0=(Start+End)/2  1=Start  2=Manual
+      var _window     = ImageWindow.activeWindow;
+      var _currentStep = 0;
+      var _csvPath    = Settings.read( SETTINGS_CSV, DataType_String ) || "";
+      var _tcrb_mag   = NaN;
+      var _merr       = NaN;
+      var _instMag_T  = null;
+      var _instMag_C  = null;
+      var _instMag_K  = null;
+      var _checkGateWarn = false;
+      var _reportText = "";
+      var _verifyBmp  = null;
+      var _scaledBmp  = null;
 
       // ---- Public result ----
       this.midJD = NaN;
+
+      // ============================================================
+      // Step management
+      // ============================================================
+
+      var _stepBtns = [];
+
+      function isStepEnabled( idx ) {
+         if ( idx <= 2 ) return true;
+         if ( idx === 3 ) return _photDone;
+         if ( idx === 4 ) return _photDone && !isNaN( self.midJD );
+         return false;
+      }
+
+      function updateStepNav() {
+         _stepBtns.forEach( function( btn, i ) {
+            btn.enabled = isStepEnabled( i );
+            var f = new Font( btn.font );
+            f.bold = ( i === _currentStep );
+            btn.font = f;
+         } );
+      }
+
+      function activateStep( idx ) {
+         if ( !isStepEnabled( idx ) ) return;
+         _currentStep = idx;
+         var panels = [ setupPanel, runPanel, midtimePanel, self.verifyCtrl, reportPanel ];
+         panels.forEach( function( p, i ) { p.visible = ( i === idx ); } );
+         updateStepNav();
+      }
 
       // ============================================================
       // Helpers
@@ -851,7 +877,7 @@ class PhotometryDialog extends Dialog {
             if ( !isNaN(lat) && !isNaN(lon) ) {
                var mAlt = moonAltitude( mid, lat, lon );
                self.moonLbl.text = mp + "%, "
-                  + format( "%.0f°", Math.abs(mAlt) )
+                  + format( "%.0f", Math.abs(mAlt) ) + "\xb0"
                   + (mAlt >= 0 ? " above horizon" : " below horizon");
             } else {
                self.moonLbl.text = mp + "%";
@@ -862,18 +888,21 @@ class PhotometryDialog extends Dialog {
 
       function applyStart( jd ) {
          _startJD = jd;
-         self.startJDLbl.text = isNaN(jd) ? "—" : format( "%.6f", jd );
+         self.startJDLbl.text      = isNaN(jd) ? "—" : format( "%.6f", jd );
+         self.summaryStartLbl.text = isNaN(jd) ? "—" : jdToISO( jd ) + " UTC";
          refreshMid();
       }
 
       function applyEnd( jd ) {
          _endJD = jd;
-         self.endJDLbl.text = isNaN(jd) ? "—" : format( "%.6f", jd );
+         self.endJDLbl.text      = isNaN(jd) ? "—" : format( "%.6f", jd );
+         self.summaryEndLbl.text = isNaN(jd) ? "—" : jdToISO( jd ) + " UTC";
          refreshMid();
       }
 
       function checkWriteEnabled() {
-         self.createReportBtn.enabled = _photDone && !isNaN(self.midJD);
+         self.createReportBtn.enabled = _photDone && !isNaN( self.midJD );
+         updateStepNav();
       }
 
       function openSubDialog( caption ) {
@@ -888,47 +917,54 @@ class PhotometryDialog extends Dialog {
          return fdlg.execute() ? fdlg.filePath : null;
       }
 
+      function updateVerifyBitmap() {
+         if ( !_verifyBmp ) { _scaledBmp = null; return; }
+         var w = self.verifyCtrl.width;
+         var h = self.verifyCtrl.height;
+         if ( w < 4 || h < 4 ) return;
+         var bw = _verifyBmp.width, bh = _verifyBmp.height;
+         var sc = Math.min( w / bw, h / bh );
+         _scaledBmp = _verifyBmp.scaled( sc );
+      }
+
+      // Ghost labels — referenced by applyStart/applyEnd but not shown in wizard
+      this.summaryStartLbl = new Label( this );
+      this.summaryStartLbl.visible = false;
+      this.summaryEndLbl   = new Label( this );
+      this.summaryEndLbl.visible   = false;
+
       // ============================================================
-      // Header
+      // Full-width header
       // ============================================================
 
       var titleLbl = new Label( this );
       titleLbl.text = TITLE + " v" + VERSION + "   ·   Benno Schneider © 2026";
 
-      var precon1 = new Label( this );
+      // ============================================================
+      // Step 0 — Setup
+      // ============================================================
+
+      var setupPanel = new Control( this );
+      setupPanel.visible = true;
+
+      var precon1 = new Label( setupPanel );
       precon1.text = "✓  Required: linear (unstretched) stack; plate-solved (ImageSolver).";
 
-      var precon2 = new Label( this );
+      var precon2 = new Label( setupPanel );
       precon2.text = "✗  Incompatible (break PSF linearity): any stretch, deconvolution, BlurXTerminator.";
 
-      var precon3 = new Label( this );
+      var precon3 = new Label( setupPanel );
       precon3.text = "✓  Safe to apply: background extraction (ABE/DBE/GradientCorrection), SPCC.";
 
-      var precon4 = new Label( this );
+      var precon4 = new Label( setupPanel );
       precon4.text = "ℹ  Save your master stack to disk before running to enable full process-history detection.";
 
-      this.warningLbl = new Label( this );
-      this.warningLbl.useRichText = true;
-      this.warningLbl.visible     = false;
-
-      this.linearityLbl = new Label( this );
-      this.linearityLbl.useRichText = true;
-      this.linearityLbl.visible     = false;
-
-      this.checkGateLbl = new Label( this );
-      this.checkGateLbl.useRichText = true;
-      this.checkGateLbl.visible     = false;
-
-      // ============================================================
-      // Input — active image + comparison CSV
-      // ============================================================
-
-      var imageLblTag = new Label( this );
+      var imageLblTag = new Label( setupPanel );
       imageLblTag.text          = "Active image:";
       imageLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       imageLblTag.setFixedWidth( 110 );
 
-      this.imageLbl = new Label( this );
+      this.imageLbl = new Label( setupPanel );
       this.imageLbl.useRichText = true;
       this.imageLbl.toolTip     = "The image window that will be measured. Must be a linear, " +
                                   "plate-solved OSC RGB master stack. Make it the active window " +
@@ -943,17 +979,17 @@ class PhotometryDialog extends Dialog {
       imageRow.add( this.imageLbl );
       imageRow.addStretch();
 
-      var csvLblTag = new Label( this );
+      var csvLblTag = new Label( setupPanel );
       csvLblTag.text          = "Comparison CSV:";
       csvLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       csvLblTag.setFixedWidth( 110 );
 
-      this.csvEdit = new Edit( this );
+      this.csvEdit = new Edit( setupPanel );
       this.csvEdit.text    = _csvPath;
       this.csvEdit.toolTip = "Path to AAVSO VSP comparison-star CSV export";
       this.csvEdit.onTextUpdated = function() { _csvPath = self.csvEdit.text.trim(); };
 
-      this.csvBrowseBtn = new PushButton( this );
+      this.csvBrowseBtn = new PushButton( setupPanel );
       this.csvBrowseBtn.text    = "Browse...";
       this.csvBrowseBtn.toolTip = "Open a comparison-star CSV exported from AAVSO VSP";
       this.csvBrowseBtn.onClick = function() {
@@ -977,11 +1013,7 @@ class PhotometryDialog extends Dialog {
       csvRow.add( this.csvEdit, 100 );
       csvRow.add( this.csvBrowseBtn );
 
-      // ---- Comp / check ComboBox selectors ----
-      // Populated by populateStarCombos() when the CSV is loaded.
-      // Items are sorted brightest-first so outburst comps (79, 84) appear at the top.
       function populateStarCombos( usable ) {
-         // Remember current label selections before clearing
          var prevComp  = ( _csvUsable.length > 0 && self.compCombo.currentItem  >= 0 )
                          ? _csvUsable[ self.compCombo.currentItem  ].label : null;
          var prevCheck = ( _csvUsable.length > 0 && self.checkCombo.currentItem >= 0 )
@@ -1006,12 +1038,12 @@ class PhotometryDialog extends Dialog {
          self.checkCombo.currentItem = checkIdx >= 0 ? checkIdx : Math.min( 1, _csvUsable.length - 1 );
       }
 
-      var compLblTag = new Label( this );
+      var compLblTag = new Label( setupPanel );
       compLblTag.text          = "Comp:";
       compLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       compLblTag.setFixedWidth( 110 );
 
-      this.compCombo = new ComboBox( this );
+      this.compCombo = new ComboBox( setupPanel );
       this.compCombo.setMinWidth( 160 );
       this.compCombo.toolTip = "Comparison star — select from non-blended V-band stars in the loaded CSV";
       this.compCombo.onItemSelected = function( idx ) {
@@ -1019,11 +1051,11 @@ class PhotometryDialog extends Dialog {
             Settings.write( SETTINGS_COMP_LABEL, DataType_String, _csvUsable[idx].label );
       };
 
-      var checkLblTag = new Label( this );
+      var checkLblTag = new Label( setupPanel );
       checkLblTag.text          = "Check:";
       checkLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
 
-      this.checkCombo = new ComboBox( this );
+      this.checkCombo = new ComboBox( setupPanel );
       this.checkCombo.setMinWidth( 160 );
       this.checkCombo.toolTip = "Check star — must differ from comp; used as independent quality indicator";
       this.checkCombo.onItemSelected = function( idx ) {
@@ -1031,7 +1063,6 @@ class PhotometryDialog extends Dialog {
             Settings.write( SETTINGS_CHECK_LABEL, DataType_String, _csvUsable[idx].label );
       };
 
-      // Pre-populate if a valid CSV path is already persisted
       if ( _csvPath && File.exists( _csvPath ) ) {
          try {
             var _initStars = loadComparisonStars( _csvPath );
@@ -1048,11 +1079,27 @@ class PhotometryDialog extends Dialog {
       compRow.add( this.checkCombo  );
       compRow.addStretch();
 
+      var setupSizer = new VerticalSizer;
+      setupSizer.spacing = 8;
+      setupSizer.add( precon1  );
+      setupSizer.add( precon2  );
+      setupSizer.add( precon3  );
+      setupSizer.add( precon4  );
+      setupSizer.addSpacing( 8 );
+      setupSizer.add( imageRow );
+      setupSizer.add( csvRow   );
+      setupSizer.add( compRow  );
+      setupSizer.addStretch();
+      setupPanel.sizer = setupSizer;
+
       // ============================================================
-      // Run Photometry button
+      // Step 1 — Run Photometry
       // ============================================================
 
-      this.runBtn = new PushButton( this );
+      var runPanel = new Control( this );
+      runPanel.visible = false;
+
+      this.runBtn = new PushButton( runPanel );
       this.runBtn.text    = "Run Photometry";
       this.runBtn.toolTip = "Measure target and comparison stars via DynamicPSF";
       this.runBtn.onClick = function() {
@@ -1069,31 +1116,34 @@ class PhotometryDialog extends Dialog {
       runRow.add( this.runBtn );
       runRow.addStretch();
 
-      // ============================================================
-      // Results display
-      // ============================================================
+      this.warningLbl = new Label( runPanel );
+      this.warningLbl.useRichText = true;
+      this.warningLbl.visible     = false;
 
-      var magTag = new Label( this );
+      this.linearityLbl = new Label( runPanel );
+      this.linearityLbl.useRichText = true;
+      this.linearityLbl.visible     = false;
+
+      var magTag = new Label( runPanel );
       magTag.text          = TARGET.name + ":";
       magTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       magTag.setFixedWidth( 60 );
 
-      this.magLbl = new Label( this );
+      this.magLbl = new Label( runPanel );
       this.magLbl.text    = "—";
       this.magLbl.toolTip = "Derived TG magnitude of " + TARGET.name + " from differential photometry " +
                             "against the selected comp star. TG (tri-colour green) is not Johnson V — " +
-                            "it runs ~0.1–0.3 mag brighter for red stars.";
+                            "it runs ~0.1-0.3 mag brighter for red stars.";
       this.magLbl.setFixedWidth( 72 );
 
-      var merrTag = new Label( this );
+      var merrTag = new Label( runPanel );
       merrTag.text          = "TG    MERR:";
       merrTag.textAlignment = TextAlignment.VertCenter;
 
-      this.merrLbl = new Label( this );
+      this.merrLbl = new Label( runPanel );
       this.merrLbl.text    = "—";
       this.merrLbl.toolTip = "Photometric magnitude error: target and comp PSF noise added in quadrature " +
-                             "via matched-filter formula (Poisson + sky background). Typical value 0.003–0.010 " +
-                             "for a 20–25 frame Seestar stack of a ~10 mag target.";
+                             "via matched-filter formula (Poisson + sky background).";
 
       var magRow = new HorizontalSizer;
       magRow.spacing = 8;
@@ -1103,16 +1153,15 @@ class PhotometryDialog extends Dialog {
       magRow.add( this.merrLbl );
       magRow.addStretch();
 
-      var instTag = new Label( this );
+      var instTag = new Label( runPanel );
       instTag.text          = "Instrumental:";
       instTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       instTag.setFixedWidth( 80 );
 
-      this.instLbl = new Label( this );
+      this.instLbl = new Label( runPanel );
       this.instLbl.text    = "—";
       this.instLbl.toolTip = "Instrumental magnitudes: T = target, C = comp, K = check star. " +
-                             "Values are −2.5·log10(PSF flux) — they can be negative for bright stars. " +
-                             "CMAG and KMAG in the AAVSO report carry these instrumental values.";
+                             "Values are -2.5*log10(PSF flux) — can be negative for bright stars.";
 
       var instRow = new HorizontalSizer;
       instRow.spacing = 8;
@@ -1120,11 +1169,34 @@ class PhotometryDialog extends Dialog {
       instRow.add( this.instLbl );
       instRow.addStretch();
 
+      this.checkGateLbl = new Label( runPanel );
+      this.checkGateLbl.useRichText = true;
+      this.checkGateLbl.visible     = false;
+
+      var runPanelSizer = new VerticalSizer;
+      runPanelSizer.spacing = 8;
+      runPanelSizer.add( runRow             );
+      runPanelSizer.add( this.warningLbl   );
+      runPanelSizer.add( this.linearityLbl );
+      runPanelSizer.addSpacing( 8 );
+      runPanelSizer.add( magRow            );
+      runPanelSizer.add( instRow           );
+      runPanelSizer.add( this.checkGateLbl );
+      runPanelSizer.addStretch();
+      runPanel.sizer = runPanelSizer;
+
       // ============================================================
-      // Timing — subframe reference buttons
+      // Step 2 — Mid-time
+      // All timing controls parented to midtimePanel so hiding the panel
+      // hides all children (Qt parent-child visibility cascade).
+      // Mid-time RadioButtons are parented to midtimePanel — this makes them
+      // one exclusive group, separate from the format RadioButtons in step 4.
       // ============================================================
 
-      this.firstSubBtn = new ToolButton( this );
+      var midtimePanel = new Control( this );
+      midtimePanel.visible = false;
+
+      this.firstSubBtn = new ToolButton( midtimePanel );
       this.firstSubBtn.icon = this.scaledResource( ":/icons/folder-open.png" );
       this.firstSubBtn.setScaledFixedSize( 20, 20 );
       this.firstSubBtn.toolTip =
@@ -1147,7 +1219,7 @@ class PhotometryDialog extends Dialog {
          }
       };
 
-      this.lastSubBtn = new ToolButton( this );
+      this.lastSubBtn = new ToolButton( midtimePanel );
       this.lastSubBtn.icon = this.scaledResource( ":/icons/folder-open.png" );
       this.lastSubBtn.setScaledFixedSize( 20, 20 );
       this.lastSubBtn.toolTip =
@@ -1175,22 +1247,21 @@ class PhotometryDialog extends Dialog {
          }
       };
 
-      // ---- Start row ----
-      var startLblTag = new Label( this );
+      var startLblTag = new Label( midtimePanel );
       startLblTag.text          = "Start (UTC):";
       startLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       startLblTag.setFixedWidth( 90 );
 
-      this.startEdit = new Edit( this );
+      this.startEdit = new Edit( midtimePanel );
       this.startEdit.setFixedWidth( 200 );
       this.startEdit.toolTip = "Session start — YYYY-MM-DDTHH:MM:SS";
       this.startEdit.onTextUpdated   = function() { applyStart( isoToJD( self.startEdit.text ) ); };
       this.startEdit.onEditCompleted = function() { applyStart( isoToJD( self.startEdit.text ) ); };
 
-      var startJDTag = new Label( this );
+      var startJDTag = new Label( midtimePanel );
       startJDTag.text = "JD:";
 
-      this.startJDLbl = new Label( this );
+      this.startJDLbl = new Label( midtimePanel );
       this.startJDLbl.text    = "—";
       this.startJDLbl.toolTip = "Julian Day of the session start time (read-only)";
       this.startJDLbl.setFixedWidth( 130 );
@@ -1204,22 +1275,21 @@ class PhotometryDialog extends Dialog {
       startRow.add( this.startJDLbl );
       startRow.addStretch();
 
-      // ---- End row ----
-      var endLblTag = new Label( this );
+      var endLblTag = new Label( midtimePanel );
       endLblTag.text          = "End (UTC):";
       endLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       endLblTag.setFixedWidth( 90 );
 
-      this.endEdit = new Edit( this );
+      this.endEdit = new Edit( midtimePanel );
       this.endEdit.setFixedWidth( 200 );
       this.endEdit.toolTip = "Session end — YYYY-MM-DDTHH:MM:SS\n(last sub DATE-OBS + EXPTIME)";
       this.endEdit.onTextUpdated   = function() { applyEnd( isoToJD( self.endEdit.text ) ); };
       this.endEdit.onEditCompleted = function() { applyEnd( isoToJD( self.endEdit.text ) ); };
 
-      var endJDTag = new Label( this );
+      var endJDTag = new Label( midtimePanel );
       endJDTag.text = "JD:";
 
-      this.endJDLbl = new Label( this );
+      this.endJDLbl = new Label( midtimePanel );
       this.endJDLbl.text    = "—";
       this.endJDLbl.toolTip = "Julian Day of the session end time (read-only)";
       this.endJDLbl.setFixedWidth( 130 );
@@ -1233,21 +1303,20 @@ class PhotometryDialog extends Dialog {
       endRow.add( this.endJDLbl );
       endRow.addStretch();
 
-      // ---- Exposure row ----
-      var framesTag = new Label( this );
+      var framesTag = new Label( midtimePanel );
       framesTag.text          = "Frames:";
       framesTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       framesTag.setFixedWidth( 90 );
 
-      this.framesEdit = new Edit( this );
+      this.framesEdit = new Edit( midtimePanel );
       this.framesEdit.setFixedWidth( 60 );
       this.framesEdit.toolTip = "Number of integrated subframes (from PixInsight processing history)";
 
-      var exptimeTag = new Label( this );
+      var exptimeTag = new Label( midtimePanel );
       exptimeTag.text          = "Exp/sub:";
       exptimeTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
 
-      this.exptimeEdit = new Edit( this );
+      this.exptimeEdit = new Edit( midtimePanel );
       this.exptimeEdit.setFixedWidth( 80 );
       this.exptimeEdit.toolTip = "Exposure time per subframe in seconds (from last-sub EXPTIME)";
 
@@ -1259,13 +1328,12 @@ class PhotometryDialog extends Dialog {
       exptimeRow.add( this.exptimeEdit );
       exptimeRow.addStretch();
 
-      // ---- Mid-time mode radios ----
-      var midLblTag = new Label( this );
+      var midLblTag = new Label( midtimePanel );
       midLblTag.text          = "Mid-exposure:";
       midLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       midLblTag.setFixedWidth( 90 );
 
-      this.rbMidpoint = new RadioButton( this );
+      this.rbMidpoint = new RadioButton( midtimePanel );
       this.rbMidpoint.text    = "= (S+E)/2";
       this.rbMidpoint.checked = true;
       this.rbMidpoint.toolTip = "Recommended: arithmetic midpoint of the session span";
@@ -1273,7 +1341,7 @@ class PhotometryDialog extends Dialog {
          if ( chk ) { _midMode = 0; self.midEdit.enabled = false; refreshMid(); }
       };
 
-      this.rbStart = new RadioButton( this );
+      this.rbStart = new RadioButton( midtimePanel );
       this.rbStart.text    = "= Start";
       this.rbStart.checked = false;
       this.rbStart.toolTip = "Use session start as mid-exposure (single-sub sessions)";
@@ -1281,7 +1349,7 @@ class PhotometryDialog extends Dialog {
          if ( chk ) { _midMode = 1; self.midEdit.enabled = false; refreshMid(); }
       };
 
-      this.rbManual = new RadioButton( this );
+      this.rbManual = new RadioButton( midtimePanel );
       this.rbManual.text    = "Manual:";
       this.rbManual.checked = false;
       this.rbManual.toolTip = "Enter mid-exposure time directly";
@@ -1289,7 +1357,7 @@ class PhotometryDialog extends Dialog {
          if ( chk ) { _midMode = 2; self.midEdit.enabled = true; refreshMid(); }
       };
 
-      this.midEdit = new Edit( this );
+      this.midEdit = new Edit( midtimePanel );
       this.midEdit.setFixedWidth( 160 );
       this.midEdit.enabled = false;
       this.midEdit.toolTip = "Manual mid-exposure — YYYY-MM-DDTHH:MM:SS";
@@ -1305,13 +1373,12 @@ class PhotometryDialog extends Dialog {
       midModeRow.add( this.midEdit    );
       midModeRow.addStretch();
 
-      // ---- Mid-time result ----
-      var midJDTag = new Label( this );
+      var midJDTag = new Label( midtimePanel );
       midJDTag.text          = "Mid JD:";
       midJDTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       midJDTag.setFixedWidth( 90 );
 
-      this.midJDLbl = new Label( this );
+      this.midJDLbl = new Label( midtimePanel );
       this.midJDLbl.text    = "—";
       this.midJDLbl.toolTip = "Mid-exposure Julian Day — this value is written to the AAVSO DATE field";
       this.midJDLbl.setFixedWidth( 130 );
@@ -1322,12 +1389,12 @@ class PhotometryDialog extends Dialog {
       midJDRow.add( this.midJDLbl );
       midJDRow.addStretch();
 
-      var midISOTag = new Label( this );
+      var midISOTag = new Label( midtimePanel );
       midISOTag.text          = "Mid UTC:";
       midISOTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       midISOTag.setFixedWidth( 90 );
 
-      this.midISOLbl = new Label( this );
+      this.midISOLbl = new Label( midtimePanel );
       this.midISOLbl.text    = "—";
       this.midISOLbl.toolTip = "Mid-exposure time in UTC — human-readable equivalent of Mid JD";
 
@@ -1337,43 +1404,42 @@ class PhotometryDialog extends Dialog {
       midISORow.add( this.midISOLbl );
       midISORow.addStretch();
 
-      // ---- Observer site (editable, populated from FITS in runPhotometry) ----
-      var latTag = new Label( this );
+      var latTag = new Label( midtimePanel );
       latTag.text          = "Lat:";
       latTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       latTag.setFixedWidth( 30 );
 
-      this.latEdit = new Edit( this );
+      this.latEdit = new Edit( midtimePanel );
       this.latEdit.setFixedWidth( 80 );
       this.latEdit.toolTip = "Observer latitude in decimal degrees (North positive)";
       this.latEdit.onTextUpdated = function() { refreshMid(); };
 
-      var latUnit = new Label( this );
-      latUnit.text = "°";
+      var latUnit = new Label( midtimePanel );
+      latUnit.text = "\xb0";
 
-      var lonTag = new Label( this );
+      var lonTag = new Label( midtimePanel );
       lonTag.text          = "Lon:";
       lonTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       lonTag.setFixedWidth( 30 );
 
-      this.lonEdit = new Edit( this );
+      this.lonEdit = new Edit( midtimePanel );
       this.lonEdit.setFixedWidth( 80 );
       this.lonEdit.toolTip = "Observer longitude in decimal degrees (East positive)";
       this.lonEdit.onTextUpdated = function() { refreshMid(); };
 
-      var lonUnit = new Label( this );
-      lonUnit.text = "°";
+      var lonUnit = new Label( midtimePanel );
+      lonUnit.text = "\xb0";
 
-      var elevTag = new Label( this );
+      var elevTag = new Label( midtimePanel );
       elevTag.text          = "Elev:";
       elevTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       elevTag.setFixedWidth( 38 );
 
-      this.elevEdit = new Edit( this );
+      this.elevEdit = new Edit( midtimePanel );
       this.elevEdit.setFixedWidth( 55 );
       this.elevEdit.toolTip = "Observer elevation in metres (informational; not used in airmass formula)";
 
-      var elevUnit = new Label( this );
+      var elevUnit = new Label( midtimePanel );
       elevUnit.text = "m";
 
       var siteRow = new HorizontalSizer;
@@ -1391,12 +1457,12 @@ class PhotometryDialog extends Dialog {
       siteRow.add( elevUnit      );
       siteRow.addStretch();
 
-      var airmassTag = new Label( this );
+      var airmassTag = new Label( midtimePanel );
       airmassTag.text          = "Airmass:";
       airmassTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       airmassTag.setFixedWidth( 90 );
 
-      this.airmassLbl = new Label( this );
+      this.airmassLbl = new Label( midtimePanel );
       this.airmassLbl.text    = "—";
       this.airmassLbl.toolTip = "Airmass at mid-exposure (Kasten & Young 1989 formula). " +
                                 "Computed from mid-JD, observer lat/lon, and target J2000 position. " +
@@ -1408,12 +1474,12 @@ class PhotometryDialog extends Dialog {
       airmassRow.add( this.airmassLbl );
       airmassRow.addStretch();
 
-      var moonTag = new Label( this );
+      var moonTag = new Label( midtimePanel );
       moonTag.text          = "Moon:";
       moonTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       moonTag.setFixedWidth( 90 );
 
-      this.moonLbl = new Label( this );
+      this.moonLbl = new Label( midtimePanel );
       this.moonLbl.text    = "—";
       this.moonLbl.toolTip = "Lunar illuminated fraction and altitude above/below horizon at mid-exposure time";
 
@@ -1423,18 +1489,68 @@ class PhotometryDialog extends Dialog {
       moonRow.add( this.moonLbl );
       moonRow.addStretch();
 
+      var midtimeSizer = new VerticalSizer;
+      midtimeSizer.spacing = 8;
+      midtimeSizer.add( startRow   );
+      midtimeSizer.add( endRow     );
+      midtimeSizer.add( exptimeRow );
+      midtimeSizer.add( midModeRow );
+      midtimeSizer.add( midJDRow   );
+      midtimeSizer.add( midISORow  );
+      midtimeSizer.add( siteRow    );
+      midtimeSizer.add( airmassRow );
+      midtimeSizer.add( moonRow    );
+      midtimeSizer.addStretch();
+      midtimePanel.sizer = midtimeSizer;
+
       // ============================================================
-      // Output file
+      // Step 3 — Verification image
       // ============================================================
 
-      var fmtLblTag = new Label( this );
+      this.verifyCtrl = new Control( this );
+      this.verifyCtrl.visible = false;
+      this.verifyCtrl.setMinSize( 200, 200 );
+      this.verifyCtrl.toolTip =
+         "Annotated thumbnail — red: T CrB, green: comp, cyan: check. " +
+         "Resize the dialog to scale the image.";
+      this.verifyCtrl.onPaint = function( x0, y0, x1, y1 ) {
+         var g = new Graphics( this );
+         g.fillRect( 0, 0, this.width, this.height, new Brush( 0xff1a1a1a ) );
+         if ( _scaledBmp ) {
+            var dx = Math.round( (this.width  - _scaledBmp.width  ) / 2 );
+            var dy = Math.round( (this.height - _scaledBmp.height ) / 2 );
+            g.drawBitmap( dx, dy, _scaledBmp );
+         } else {
+            g.pen = new Pen( 0xff555555, 1 );
+            g.drawText( 20, Math.round( this.height / 2 ),
+                        "Run Photometry to see verification image" );
+         }
+         g.end();
+      };
+      this.verifyCtrl.onResize = function( ww, hh ) {
+         if ( _verifyBmp && ww > 3 && hh > 3 ) {
+            var bw = _verifyBmp.width, bh = _verifyBmp.height;
+            var sc = Math.min( ww / bw, hh / bh );
+            _scaledBmp = _verifyBmp.scaled( sc );
+         }
+         this.repaint();
+      };
+
+      // ============================================================
+      // Step 4 — Report
+      // Format RadioButtons parented to fmtGrp (child of reportPanel),
+      // so they form a separate exclusive group from the mid-time radios.
+      // ============================================================
+
+      var reportPanel = new Control( this );
+      reportPanel.visible = false;
+
+      var fmtLblTag = new Label( reportPanel );
       fmtLblTag.text          = "Format:";
       fmtLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       fmtLblTag.setFixedWidth( 90 );
 
-      // Separate Control parent so this group does not share an exclusive
-      // Qt button group with the mid-time RadioButtons (same dialog parent).
-      var fmtGrp = new Control( this );
+      var fmtGrp = new Control( reportPanel );
 
       this.rbHuman = new RadioButton( fmtGrp );
       this.rbHuman.text    = "Human readable";
@@ -1465,8 +1581,7 @@ class PhotometryDialog extends Dialog {
       fmtRow.add( fmtGrp    );
       fmtRow.addStretch();
 
-      // ---- Create Report button ----
-      this.createReportBtn = new PushButton( this );
+      this.createReportBtn = new PushButton( reportPanel );
       this.createReportBtn.text    = "Create Report";
       this.createReportBtn.enabled = false;
       this.createReportBtn.toolTip = "Generate report text in the selected format";
@@ -1477,13 +1592,12 @@ class PhotometryDialog extends Dialog {
       createReportRow.add( this.createReportBtn );
       createReportRow.addStretch();
 
-      // ---- Report text preview ----
-      this.reportBox = new TextBox( this );
+      this.reportBox = new TextBox( reportPanel );
       this.reportBox.readOnly = true;
-      this.reportBox.setFixedHeight( 200 );
+      this.reportBox.setMinHeight( 80 );
       this.reportBox.toolTip = "Generated report — review before exporting";
 
-      this.outBrowseBtn = new PushButton( this );
+      this.outBrowseBtn = new PushButton( reportPanel );
       this.outBrowseBtn.text    = "Export...";
       this.outBrowseBtn.toolTip = "Choose a file and write the report";
       this.outBrowseBtn.onClick = function() {
@@ -1500,7 +1614,7 @@ class PhotometryDialog extends Dialog {
          ];
          var _now    = new Date;
          var dateStr = !isNaN(self.midJD)
-            ? jdToISO( self.midJD ).substring( 0, 10 )   // "YYYY-MM-DD"
+            ? jdToISO( self.midJD ).substring( 0, 10 )
             : format( "%04d-%02d-%02d", _now.getFullYear(), _now.getMonth() + 1, _now.getDate() );
          var suggestedName = "tcrb_photometry_" + dateStr;
          var lastDir = Settings.read( SETTINGS_LAST_DIR, DataType_String )
@@ -1513,9 +1627,6 @@ class PhotometryDialog extends Dialog {
             var ext = File.extractExtension( outPath ).toLowerCase();
             if ( ext !== ".txt" && ext !== ".csv" && ext !== ".tsv" ) {
                outPath += ".txt";
-               // The dialog's overwritePrompt fired for the name without extension.
-               // Re-check now that .txt has been appended — a pre-existing file
-               // would otherwise be silently overwritten.
                if ( File.exists( outPath ) ) {
                   var answer = new MessageBox(
                      outPath + " already exists. Overwrite?",
@@ -1539,8 +1650,35 @@ class PhotometryDialog extends Dialog {
       outRow.add( this.outBrowseBtn );
       outRow.addStretch();
 
+      var reportSizer = new VerticalSizer;
+      reportSizer.spacing = 8;
+      reportSizer.add( fmtRow          );
+      reportSizer.add( createReportRow );
+      reportSizer.add( this.reportBox, 100 );
+      reportSizer.add( outRow          );
+      reportPanel.sizer = reportSizer;
+
       // ============================================================
-      // Action buttons
+      // Step navigator (left column PushButtons)
+      // ============================================================
+
+      var STEP_NAMES = [
+         "1   Setup",
+         "2   Run Photometry",
+         "3   Mid-time",
+         "4   Verification",
+         "5   Report"
+      ];
+
+      STEP_NAMES.forEach( function( name, idx ) {
+         var btn = new PushButton( self );
+         btn.text = name;
+         (function( i ) { btn.onClick = function() { activateStep( i ); }; })( idx );
+         _stepBtns.push( btn );
+      } );
+
+      // ============================================================
+      // Help / Close buttons
       // ============================================================
 
       this.helpBtn = new ToolButton( this );
@@ -1568,68 +1706,60 @@ class PhotometryDialog extends Dialog {
       btnRow.add( this.closeBtn );
 
       // ============================================================
-      // Main sizer — top to bottom
+      // Vertical separator helper
       // ============================================================
 
-      function hSep() {
-         var s = new Label( self );
-         s.useRichText = true;
-         s.text = "<hr/>";
+      function vSep() {
+         var s = new Control( self );
+         s.setFixedWidth( 1 );
+         s.onPaint = function( x0, y0, x1, y1 ) {
+            var g = new Graphics( this );
+            g.pen = new Pen( 0xff505050, 1 );
+            g.drawLine( 0, 0, 0, this.height );
+            g.end();
+         };
          return s;
       }
+
+      // ============================================================
+      // Left column — step buttons + help/close at bottom
+      // ============================================================
+
+      var leftCol = new VerticalSizer;
+      leftCol.spacing = 4;
+      _stepBtns.forEach( function( btn ) { leftCol.add( btn ); } );
+      leftCol.addStretch();
+      leftCol.add( btnRow );
+
+      // ============================================================
+      // Right column — one panel visible at a time
+      // ============================================================
+
+      var rightCol = new VerticalSizer;
+      rightCol.spacing = 0;
+      rightCol.add( setupPanel,      100 );
+      rightCol.add( runPanel,        100 );
+      rightCol.add( midtimePanel,    100 );
+      rightCol.add( self.verifyCtrl, 100 );
+      rightCol.add( reportPanel,     100 );
+
+      // ============================================================
+      // Main sizer
+      // ============================================================
+
+      updateStepNav();   // bold step 0; grey steps 3-4
+
+      var contentRow = new HorizontalSizer;
+      contentRow.spacing = 12;
+      contentRow.add( leftCol        );
+      contentRow.add( vSep()         );
+      contentRow.add( rightCol, 100  );
 
       this.sizer = new VerticalSizer;
       this.sizer.margin  = 12;
       this.sizer.spacing = 8;
-
-      // Header
       this.sizer.add( titleLbl         );
-      this.sizer.addSpacing( 4         );
-      this.sizer.add( precon1          );
-      this.sizer.add( precon2          );
-      this.sizer.add( precon3          );
-      this.sizer.add( precon4          );
-      this.sizer.add( this.warningLbl   );
-      this.sizer.add( this.linearityLbl );
-
-      // Input
-      this.sizer.add( hSep()    );
-      this.sizer.add( imageRow  );
-      this.sizer.add( csvRow    );
-      this.sizer.add( compRow   );
-
-      // Run
-      this.sizer.addSpacing( 4 );
-      this.sizer.add( runRow   );
-
-      // Results
-      this.sizer.add( hSep()             );
-      this.sizer.add( magRow             );
-      this.sizer.add( instRow            );
-      this.sizer.add( this.checkGateLbl  );
-
-      // Timing
-      this.sizer.add( hSep()      );
-      this.sizer.add( startRow );
-      this.sizer.add( endRow   );
-      this.sizer.add( exptimeRow  );
-      this.sizer.add( midModeRow  );
-      this.sizer.add( midJDRow    );
-      this.sizer.add( midISORow   );
-      this.sizer.add( siteRow     );
-      this.sizer.add( airmassRow  );
-      this.sizer.add( moonRow     );
-
-      // Output
-      this.sizer.add( hSep()             );
-      this.sizer.add( fmtRow             );
-      this.sizer.add( createReportRow    );
-      this.sizer.add( this.reportBox     );
-      this.sizer.add( outRow             );
-
-      // Buttons
-      this.sizer.add( hSep()  );
-      this.sizer.add( btnRow  );
+      this.sizer.add( contentRow, 100  );
 
       // ============================================================
       // Photometry logic — runs when Run Photometry is clicked
@@ -1834,10 +1964,11 @@ class PhotometryDialog extends Dialog {
          console.writeln( "  comp  " + compStar.label  + ":  " + psfLine( compPSF  ) );
          console.writeln( "  check " + checkStar.label + ":  " + psfLine( checkPSF ) );
 
-         // Verification image — annotated thumbnail showing which stars were measured
-         createVerificationImage( _window, targetPix, compStar, compPix,
-                                  checkReject ? null : checkStar,
-                                  checkReject ? null : checkPix );
+         // Verification image — embedded in the right panel
+         _verifyBmp = createVerificationImage( _window, targetPix, compStar, compPix,
+                                               checkReject ? null : checkStar,
+                                               checkReject ? null : checkPix );
+         updateVerifyBitmap();
 
          // Photometry math
          _instMag_T = psfInstrumentalMag( targetPSF );
