@@ -69,4 +69,12 @@
 - [ ] User-specifiable target star
 - [ ] TG→V transformation (`TRANS=YES`)
 - [ ] Multiband TB/TG (blue channel)
-- [ ] README.md
+
+### Documentation (needed before 1.0.0)
+- [ ] **README: screenshot** of the dialog (use `docs/screenshot, 28Jun26, initial version.png` or a fresher one)
+- [ ] **README: getting-started guide** — end-to-end from download to first submitted report (assumes no prior PixInsight scripting knowledge)
+- [ ] **README: how to get the comparison-star CSV** from AAVSO VSP (URL, field-of-view setting, magnitude limit, download as CSV)
+- [ ] **README: how to submit to AAVSO WebObs** — link and brief steps after exporting the AAVSO Extended report
+- [ ] **README: troubleshooting** — common errors and fixes (no active window, plate solve missing, star outside frame, PSF rejected)
+- [ ] **README: outburst strategy summary** — when to switch comp/check labels and where to get a new chart (condense from `docs/domain-knowledge.md`)
+- [ ] **README: known limitations** — TG ≠ V (systematic offset for red stars), Seestar FOV constraint at nova peak
