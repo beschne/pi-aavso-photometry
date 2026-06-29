@@ -774,10 +774,11 @@ class PhotometryDialog extends Dialog {
       // Timing — subframe reference buttons
       // ============================================================
 
-      this.firstSubBtn = new PushButton( this );
-      this.firstSubBtn.text    = "First Sub → Start...";
+      this.firstSubBtn = new ToolButton( this );
+      this.firstSubBtn.icon = this.scaledResource( ":/icons/folder-open.png" );
+      this.firstSubBtn.setScaledFixedSize( 20, 20 );
       this.firstSubBtn.toolTip =
-         "Select the first (earliest) surviving subframe.\nSets Start = its DATE-OBS.";
+         "Select the first (earliest) surviving subframe — sets Start = its DATE-OBS.";
       this.firstSubBtn.onClick = function() {
          var path = openSubDialog( "Select first (earliest) subframe" );
          if ( !path ) return;
@@ -796,10 +797,11 @@ class PhotometryDialog extends Dialog {
          }
       };
 
-      this.lastSubBtn = new PushButton( this );
-      this.lastSubBtn.text    = "Last Sub → End...";
+      this.lastSubBtn = new ToolButton( this );
+      this.lastSubBtn.icon = this.scaledResource( ":/icons/folder-open.png" );
+      this.lastSubBtn.setScaledFixedSize( 20, 20 );
       this.lastSubBtn.toolTip =
-         "Select the last (latest) surviving subframe.\nSets End = its DATE-OBS + EXPTIME.";
+         "Select the last (latest) surviving subframe — sets End = its DATE-OBS + EXPTIME.";
       this.lastSubBtn.onClick = function() {
          var path = openSubDialog( "Select last (latest) subframe" );
          if ( !path ) return;
@@ -822,12 +824,6 @@ class PhotometryDialog extends Dialog {
             new MessageBox( String(e.message || e), TITLE, StdIcon.Warning, StdButton.Ok ).execute();
          }
       };
-
-      var subBtnRow = new HorizontalSizer;
-      subBtnRow.spacing = 8;
-      subBtnRow.add( this.firstSubBtn );
-      subBtnRow.add( this.lastSubBtn );
-      subBtnRow.addStretch();
 
       // ---- Start row ----
       var startLblTag = new Label( this );
@@ -852,6 +848,7 @@ class PhotometryDialog extends Dialog {
       startRow.spacing = 8;
       startRow.add( startLblTag );
       startRow.add( this.startEdit );
+      startRow.add( this.firstSubBtn );
       startRow.add( startJDTag );
       startRow.add( this.startJDLbl );
       startRow.addStretch();
@@ -879,6 +876,7 @@ class PhotometryDialog extends Dialog {
       endRow.spacing = 8;
       endRow.add( endLblTag );
       endRow.add( this.endEdit );
+      endRow.add( this.lastSubBtn );
       endRow.add( endJDTag );
       endRow.add( this.endJDLbl );
       endRow.addStretch();
@@ -1214,9 +1212,8 @@ class PhotometryDialog extends Dialog {
 
       // Timing
       this.sizer.add( hSep()      );
-      this.sizer.add( subBtnRow   );
-      this.sizer.add( startRow    );
-      this.sizer.add( endRow      );
+      this.sizer.add( startRow );
+      this.sizer.add( endRow   );
       this.sizer.add( exptimeRow  );
       this.sizer.add( midModeRow  );
       this.sizer.add( midJDRow    );
