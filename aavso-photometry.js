@@ -17,7 +17,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -1468,9 +1468,9 @@ class PhotometryDialog extends Dialog {
          if ( histIdx > 0 && forbidden.length === 0 ) {
             linearityMsgs.push(
                "<font color='#997700'>⚠  Image has " + histIdx + " unsaved edit" +
-               ( histIdx === 1 ? "" : "s" ) +
-               " this session — process history not recorded in FITS keywords. " +
-               "Save to disk for reliable detection.</font>"
+               ( histIdx === 1 ? "" : "s" ) + " this session.<br/>" +
+               "&nbsp;&nbsp;&nbsp;Process history is not recorded in FITS keywords.<br/>" +
+               "&nbsp;&nbsp;&nbsp;Save to disk for reliable detection.</font>"
             );
          }
 
