@@ -95,7 +95,7 @@ TODO.md                      Build checklist and roadmap
 
 ## Roadmap
 
-- Selectable comp/check stars in the dialog (needed for outburst — stars 84, 79, …)
+- Selectable comp/check stars in the dialog ✓ (switch to 84, 79, … for outburst)
 - Annotated verification image (thumbnail with target + comp/check marked)
 - Check-star gate (warn if comp/check deviation exceeds threshold)
 - Ensemble photometry

@@ -57,7 +57,7 @@
 
 ## Roadmap items (not in scope for v1)
 
-- [ ] Selectable comp/check stars in the dialog at runtime (Priority 1 — needed for outburst)
+- [x] Selectable comp/check stars in the dialog at runtime (Comp/Check label edit fields, persisted)
 - [ ] **Forbidden-process detection — robustness** (current check only covers saved FITS `HISTORY` keywords; in-memory stacks after `ImageIntegration` are a blind spot):
   - [ ] Warn if `view.historyIndex > 0` when no forbidden HISTORY keyword found ("image modified this session — verify linearity")
   - [ ] Supplement with green-channel median heuristic: linear master typically < 0.05; stretched image typically > 0.15

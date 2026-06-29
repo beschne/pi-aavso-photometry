@@ -70,6 +70,41 @@ The master is a normalised float in [0,1] — an absolute pixel threshold is mea
 
 Caveat: true saturation is a subframe property; on the master this is only a heuristic — keep it conservative.
 
+## Outburst observation strategy
+
+T CrB is expected to brighten by ~8 magnitudes from quiescence (~10 V) to nova peak (~2 V). The script handles this in two stages:
+
+### Stage 1 — Early brightening (~7–9 mag): change comp/check labels in the dialog
+
+The current chart **X42597QE** already contains brighter comp stars:
+
+| Label | AUID | V mag | Use when T CrB is |
+|-------|------|-------|-------------------|
+| `98`  | `000-BBW-796` | 9.809 | Quiescence (~10 V) — default |
+| `106` | `000-BJS-901` | 10.554 | Quiescence — default check |
+| `84`  | `000-BBW-888` | 8.361 | Brightening, ~7–9 mag |
+| `79`  | `000-BBW-881` | 7.886 | Brightening, ~7–9 mag |
+
+Switch comp and check labels in the **Comp label / Check label** dialog fields before clicking Run Photometry. The selection persists between sessions via Settings.
+
+### Stage 2 — Nova peak (~2–6 mag): download a new VSP chart
+
+At peak brightness the faint comp stars in X42597QE are still measurable — the problem is T CrB itself will saturate at any normal exposure. You will be shooting very short sub-second exposures, and comp stars fainter than ~5 mag may be undetectable in those frames.
+
+**What to do:**
+1. Go to the **AAVSO Variable Star Plotter** (VSP) at `aavso.org/vsp`.
+2. Enter `T CrB`, set field of view to 180′ or wider, and set magnitude limit to ~5 or 6.
+3. Download the **Photometry Table** as CSV — it is the same column format the script already reads.
+4. Load the new CSV in the script via the Browse button; enter suitable comp/check labels from the new chart.
+5. Update the `CHART` constant in the script to match the new chart ID shown in the VSP output.
+
+**The Seestar FOV constraint:** the Seestar S50 has a ~1.4° × 1.0° FOV. At 2 mag, suitable comp stars (1–4 mag) may not exist within that window — the nearest bright Corona Borealis star, Alphecca (α CrB, 2.22 V), is ~4° away. If no adequate comp falls in frame, consider:
+- Using a wider-field setup for the nova peak
+- Visual observation — AAVSO actively solicits visual reports for bright novae
+- Ensemble photometry of several fainter in-frame stars with `CNAME=ENSEMBLE` (future feature)
+
+**AAVSO alert notices:** when T CrB enters outburst AAVSO will issue Alert Notices with specific chart recommendations and exposure guidance. Monitor `aavso.org/news` and the T CrB campaign page.
+
 ## MERR — photometric magnitude error
 
 `MERR` is computed from the DynamicPSF fit residuals, capturing Poisson photon noise + sky background noise + read noise without needing separate gain or read-noise FITS keywords.

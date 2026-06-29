@@ -162,7 +162,7 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). S
 |---------|----------|
 | **Header** | Title label; "Benno Schneider © 2026" credit |
 | **Preconditions** | Three `Label` controls with ✓/✗ icon prefixes (Required / Incompatible / Safe); `warningLbl` (hidden until Run is clicked) shows detected forbidden processes in red bold HTML |
-| **Input** | Active image name (read-only); comparison CSV path + Browse button |
+| **Input** | Active image name (read-only); comparison CSV path + Browse button; Comp label / Check label edit fields (default `98`/`106`, persisted); "Available:" label listing non-blended V-band stars after Run |
 | **Run** | "Run Photometry" button |
 | **Results** | Derived T CrB magnitude + uncertainty; instrumental mags for target / comp / check |
 | **Timing** | First/last sub reference buttons; Start / End ISO fields + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat / Lon / Elev editable fields (pre-filled from FITS); airmass readout |
@@ -181,7 +181,7 @@ Notes on verified patterns and stumbling blocks: `docs/pjsr-api-notes.md`.
 
 Keep code structured so these are additions, not rewrites. In priority order:
 
-- **(Priority 1) Selectable comp/check stars at runtime.** Labels `98`/`106` work at quiescence but are unusable when T CrB brightens by ~8 mag. The user must be able to switch to brighter comps (`84`, `79`, …) from the dialog without editing code.
+- ~~**(Priority 1) Selectable comp/check stars at runtime.**~~ Done: Comp label / Check label edit fields in the dialog, defaulting to `98`/`106`, persisted in Settings. Available stars listed after Run. See `docs/domain-knowledge.md` for full outburst strategy.
 
 - **(High priority — QA, low effort)**
   - **Annotated verification image.** Thumbnail showing target + comp/check stars before the report is written. Catches the most common failure (wrong star) at a glance.

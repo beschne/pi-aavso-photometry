@@ -32,19 +32,11 @@ const TARGET = {
 // as editable fields in the dialog. Elevation defaults to 0 m if absent
 // from FITS. If lat or lon remain blank, AMASS is written as "na".
 
-// --- Comparison and check stars (chart X42597QE) -----------------
-// Good at quiescence (~10 V). Switch to brighter comps (84, 79)
-// when T CrB enters outburst — see Roadmap in CLAUDE.md.
-const COMP = {
-   label : "98",
-   auid  : "000-BBW-796",
-   magV  : 9.809,
-};
-const CHECK = {
-   label : "106",
-   auid  : "000-BJS-901",
-   magV  : 10.554,
-};
+// --- Default comp/check labels (chart X42597QE, quiescence ~10 V) -----------
+// These are the startup defaults. The user can switch to brighter comps (84, 79)
+// from the dialog when T CrB brightens — see docs/domain-knowledge.md.
+const DEFAULT_COMP_LABEL  = "98";
+const DEFAULT_CHECK_LABEL = "106";
 
 // --- AAVSO report metadata ---------------------------------------
 const OBSCODE = "BSLA";
@@ -72,9 +64,11 @@ const PSF_BOX_HALF = 10;
 const MAX_CENTROID_DRIFT_PX = 5.0;
 
 // --- Settings keys -----------------------------------------------
-const SETTINGS_NS       = "BeSchne/Photometry";
-const SETTINGS_CSV      = SETTINGS_NS + "/comparisonCsvPath";
-const SETTINGS_LAST_DIR = SETTINGS_NS + "/lastExportDir";
+const SETTINGS_NS          = "BeSchne/Photometry";
+const SETTINGS_CSV         = SETTINGS_NS + "/comparisonCsvPath";
+const SETTINGS_LAST_DIR    = SETTINGS_NS + "/lastExportDir";
+const SETTINGS_COMP_LABEL  = SETTINGS_NS + "/compLabel";
+const SETTINGS_CHECK_LABEL = SETTINGS_NS + "/checkLabel";
 
 // ============================================================
 // CSV parsing
@@ -631,8 +625,10 @@ class PhotometryDialog extends Dialog {
       var self = this;
 
       // ---- Internal state ----
-      var _photDone  = false;
-      var _startJD   = NaN;
+      var _photDone   = false;
+      var _compStar   = null;   // set by runPhotometry(); used by generateReport()
+      var _checkStar  = null;
+      var _startJD    = NaN;
       var _endJD     = NaN;
       var _midMode   = 0;       // 0=(Start+End)/2  1=Start  2=Manual
       var _window    = ImageWindow.activeWindow;
@@ -790,6 +786,40 @@ class PhotometryDialog extends Dialog {
       csvRow.add( csvLblTag );
       csvRow.add( this.csvEdit, 100 );
       csvRow.add( this.csvBrowseBtn );
+
+      // ---- Comp / check label selectors ----
+      var compLblTag = new Label( this );
+      compLblTag.text          = "Comp label:";
+      compLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+      compLblTag.setFixedWidth( 110 );
+
+      this.compLabelEdit = new Edit( this );
+      this.compLabelEdit.text      = Settings.read( SETTINGS_COMP_LABEL,  DataType_String ) || DEFAULT_COMP_LABEL;
+      this.compLabelEdit.setFixedWidth( 50 );
+      this.compLabelEdit.toolTip   = "Chart label of the comparison star (e.g. 98, 84, 79)";
+
+      var checkLblTag = new Label( this );
+      checkLblTag.text          = "Check label:";
+      checkLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+
+      this.checkLabelEdit = new Edit( this );
+      this.checkLabelEdit.text    = Settings.read( SETTINGS_CHECK_LABEL, DataType_String ) || DEFAULT_CHECK_LABEL;
+      this.checkLabelEdit.setFixedWidth( 50 );
+      this.checkLabelEdit.toolTip = "Chart label of the check star (e.g. 106, 98)";
+
+      this.availableStarsLbl = new Label( this );
+      this.availableStarsLbl.text    = "Available: —";
+      this.availableStarsLbl.toolTip = "Non-blended V-band stars in the loaded CSV (populated after Run Photometry)";
+
+      var compRow = new HorizontalSizer;
+      compRow.spacing = 8;
+      compRow.add( compLblTag           );
+      compRow.add( this.compLabelEdit   );
+      compRow.add( checkLblTag          );
+      compRow.add( this.checkLabelEdit  );
+      compRow.addSpacing( 12 );
+      compRow.add( this.availableStarsLbl );
+      compRow.addStretch();
 
       // ============================================================
       // Run Photometry button
@@ -1296,6 +1326,7 @@ class PhotometryDialog extends Dialog {
       this.sizer.add( hSep()    );
       this.sizer.add( imageRow  );
       this.sizer.add( csvRow    );
+      this.sizer.add( compRow   );
 
       // Run
       this.sizer.addSpacing( 4 );
@@ -1426,14 +1457,27 @@ class PhotometryDialog extends Dialog {
                                " (" + s.auid + ") — " + s.comments )
          );
 
-         var compStar  = usable.find( s => s.label === COMP.label  );
-         var checkStar = usable.find( s => s.label === CHECK.label );
+         // Populate available-stars display and look up selected comp/check
+         var availStr = usable.map( function(s) {
+            return s.label + " (" + format( "%.1f", s.magV ) + "V)";
+         } ).join( ",  " );
+         self.availableStarsLbl.text = "Available: " + ( availStr || "—" );
+
+         var compLabel  = self.compLabelEdit.text.trim()  || DEFAULT_COMP_LABEL;
+         var checkLabel = self.checkLabelEdit.text.trim() || DEFAULT_CHECK_LABEL;
+         var compStar   = usable.find( s => s.label === compLabel  );
+         var checkStar  = usable.find( s => s.label === checkLabel );
          if ( !compStar )
-            throw new Error( "Comparison star label \"" + COMP.label +
-                             "\" not found or excluded in: " + _csvPath );
+            throw new Error( "Comparison star label \"" + compLabel +
+                             "\" not found or excluded in: " + _csvPath +
+                             "\nAvailable: " + availStr );
          if ( !checkStar )
-            throw new Error( "Check star label \"" + CHECK.label +
-                             "\" not found or excluded in: " + _csvPath );
+            throw new Error( "Check star label \"" + checkLabel +
+                             "\" not found or excluded in: " + _csvPath +
+                             "\nAvailable: " + availStr );
+
+         Settings.write( SETTINGS_COMP_LABEL,  DataType_String, compLabel  );
+         Settings.write( SETTINGS_CHECK_LABEL, DataType_String, checkLabel );
 
          // Project to pixels
          var targetPix = celestialToPixel( metadata, TARGET.ra, TARGET.dec );
@@ -1447,29 +1491,29 @@ class PhotometryDialog extends Dialog {
          var checkPix = celestialToPixel( metadata, checkStar.ra, checkStar.dec );
          if ( !compPix || compPix.x < 0 || compPix.y < 0 ||
               compPix.x >= image.width || compPix.y >= image.height )
-            throw new Error( "Comparison star " + COMP.label + " is outside the image frame." );
+            throw new Error( "Comparison star " + compStar.label + " is outside the image frame." );
          if ( !checkPix || checkPix.x < 0 || checkPix.y < 0 ||
               checkPix.x >= image.width || checkPix.y >= image.height )
-            throw new Error( "Check star " + CHECK.label + " is outside the image frame." );
+            throw new Error( "Check star " + checkStar.label + " is outside the image frame." );
 
-         console.writeln( TARGET.name + " → pixel (" + targetPix.x.toFixed(1) +
+         console.writeln( TARGET.name + " -> pixel (" + targetPix.x.toFixed(1) +
                           ", " + targetPix.y.toFixed(1) + ")" );
-         console.writeln( "Comp  " + COMP.label  + " → pixel (" +
+         console.writeln( "Comp  " + compStar.label  + " -> pixel (" +
                           compPix.x.toFixed(1)  + ", " + compPix.y.toFixed(1)  + ")" );
-         console.writeln( "Check " + CHECK.label + " → pixel (" +
+         console.writeln( "Check " + checkStar.label + " -> pixel (" +
                           checkPix.x.toFixed(1) + ", " + checkPix.y.toFixed(1) + ")" );
 
          // PSF measurement
          var psfInput = [
-            { label: TARGET.name, x: targetPix.x, y: targetPix.y },
-            { label: COMP.label,  x: compPix.x,   y: compPix.y   },
-            { label: CHECK.label, x: checkPix.x,  y: checkPix.y  },
+            { label: TARGET.name,      x: targetPix.x, y: targetPix.y },
+            { label: compStar.label,   x: compPix.x,   y: compPix.y   },
+            { label: checkStar.label,  x: checkPix.x,  y: checkPix.y  },
          ];
          var psfFits  = fitPSF( _window, psfInput );
 
-         var targetPSF = psfFits[ TARGET.name ];
-         var compPSF   = psfFits[ COMP.label  ];
-         var checkPSF  = psfFits[ CHECK.label ];
+         var targetPSF = psfFits[ TARGET.name     ];
+         var compPSF   = psfFits[ compStar.label  ];
+         var checkPSF  = psfFits[ checkStar.label ];
 
          var targetReject = checkPSFQuality( targetPSF, targetPix.x, targetPix.y );
          var compReject   = checkPSFQuality( compPSF,   compPix.x,   compPix.y   );
@@ -1478,9 +1522,9 @@ class PhotometryDialog extends Dialog {
          if ( targetReject )
             throw new Error( TARGET.name + " PSF rejected: " + targetReject );
          if ( compReject )
-            throw new Error( "Comp " + COMP.label + " PSF rejected: " + compReject );
+            throw new Error( "Comp " + compStar.label + " PSF rejected: " + compReject );
          if ( checkReject )
-            console.warningln( "Check " + CHECK.label + " PSF rejected: " + checkReject +
+            console.warningln( "Check " + checkStar.label + " PSF rejected: " + checkReject +
                                " — MERR will be unreliable." );
 
          function psfLine( psf ) {
@@ -1490,8 +1534,8 @@ class PhotometryDialog extends Dialog {
          }
          console.writeln( "PSF fits (green channel):" );
          console.writeln( "  " + TARGET.name + ":       " + psfLine( targetPSF ) );
-         console.writeln( "  comp  " + COMP.label  + ":  " + psfLine( compPSF  ) );
-         console.writeln( "  check " + CHECK.label + ":  " + psfLine( checkPSF ) );
+         console.writeln( "  comp  " + compStar.label  + ":  " + psfLine( compPSF  ) );
+         console.writeln( "  check " + checkStar.label + ":  " + psfLine( checkPSF ) );
 
          // Photometry math
          _instMag_T = psfInstrumentalMag( targetPSF );
@@ -1501,9 +1545,13 @@ class PhotometryDialog extends Dialog {
          if ( _instMag_T === null )
             throw new Error( TARGET.name + ": flux zero or negative — cannot compute magnitude." );
          if ( _instMag_C === null )
-            throw new Error( "Comp " + COMP.label + ": flux zero or negative — cannot compute magnitude." );
+            throw new Error( "Comp " + compStar.label + ": flux zero or negative — cannot compute magnitude." );
 
-         _tcrb_mag = COMP.magV + ( _instMag_T - _instMag_C );
+         _tcrb_mag = compStar.magV + ( _instMag_T - _instMag_C );
+
+         // Store for report generator
+         _compStar  = compStar;
+         _checkStar = checkStar;
 
          // MERR: propagate per-star PSF noise in quadrature (Poisson + sky background)
          var sigT = psfMagError( targetPSF );
@@ -1518,7 +1566,7 @@ class PhotometryDialog extends Dialog {
 
          console.writeln( "Photometry:" );
          console.writeln( format( "  %ls = %.3f TG   MERR = %.3f  (comp %ls, V = %.3f)",
-                                  TARGET.name, _tcrb_mag, _merr, COMP.label, COMP.magV ) );
+                                  TARGET.name, _tcrb_mag, _merr, compStar.label, compStar.magV ) );
          console.writeln( "  inst T = " + format( "%.4f", _instMag_T ) +
                           "  err=" + format( "%.3f", sigT || 0 ) +
                           "   inst C = " + format( "%.4f", _instMag_C ) +
@@ -1528,10 +1576,10 @@ class PhotometryDialog extends Dialog {
 
          // Check-star quality gate — independent of MERR
          if ( _instMag_K !== null ) {
-            var checkStd = COMP.magV + ( _instMag_K - _instMag_C );
-            var checkDev = Math.abs( checkStd - CHECK.magV );
+            var checkStd = compStar.magV + ( _instMag_K - _instMag_C );
+            var checkDev = Math.abs( checkStd - checkStar.magV );
             console.writeln( "  Check star: derived " + format( "%.3f", checkStd ) +
-                             " vs catalogue V=" + format( "%.3f", CHECK.magV ) +
+                             " vs catalogue V=" + format( "%.3f", checkStar.magV ) +
                              " -> deviation " + format( "%.3f", checkDev ) + " mag" );
             if ( checkDev > 3.0 * _merr )
                console.warningln( "  Check star deviation (" + format( "%.3f", checkDev ) +
@@ -1575,7 +1623,7 @@ class PhotometryDialog extends Dialog {
          if ( framesVal  ) stackInfo += framesVal + " frames";
          if ( exptimeVal ) stackInfo += (stackInfo ? " x " : "") + exptimeVal + "s";
          var moonVal = self.moonLbl.text !== "—" ? "moon " + self.moonLbl.text : "";
-         var notes = "TG green channel; DynamicPSF; comp " + COMP.label + "; check " + CHECK.label
+         var notes = "TG green channel; DynamicPSF; comp " + _compStar.label + "; check " + _checkStar.label
                    + (stackInfo ? "; " + stackInfo : "")
                    + (moonVal   ? "; " + moonVal   : "");
 
@@ -1610,11 +1658,11 @@ class PhotometryDialog extends Dialog {
             kv( "Moon",            self.moonLbl.text                                  ),
             kv( "Stack",           stackStr                                            ),
             "",
-            kv( "Comparison star", "label " + COMP.label  + " / " + COMP.auid  +
-                                   " / V = " + format( "%.3f", COMP.magV  )          ),
+            kv( "Comparison star", "label " + _compStar.label  + " / " + _compStar.auid  +
+                                   " / V = " + format( "%.3f", _compStar.magV  )     ),
             kv( "  Inst. mag",     format( "%.4f", _instMag_C )                      ),
-            kv( "Check star",      "label " + CHECK.label + " / " + CHECK.auid +
-                                   " / V = " + format( "%.3f", CHECK.magV )          ),
+            kv( "Check star",      "label " + _checkStar.label + " / " + _checkStar.auid +
+                                   " / V = " + format( "%.3f", _checkStar.magV )     ),
             kv( "  Inst. mag",     kmag                                               ),
             "",
             kv( "Observer code",   OBSCODE                                            ),
@@ -1641,9 +1689,9 @@ class PhotometryDialog extends Dialog {
             format( "%.3f", _tcrb_mag  ),
             format( "%.3f", _merr      ),
             "TG", "NO", "STD",
-            COMP.auid,
+            _compStar.auid,
             format( "%.4f", _instMag_C ),
-            CHECK.auid,
+            _checkStar.auid,
             kmag,
             amassStr,
             "na", CHART, notes,
