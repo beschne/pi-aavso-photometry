@@ -5,6 +5,8 @@
 ![platform](https://img.shields.io/badge/platform-macOS_%7C_Windows_%7C_Linux-lightgrey)
 ![vibe coded](https://img.shields.io/badge/vibe_coded-Claude_Sonnet-blueviolet)
 
+*[Deutsche Version](README.de.md)*
+
 A native **PixInsight PJSR script** that performs differential photometry of variable
 stars directly inside PixInsight and writes an **AAVSO Extended File Format** report.
 
