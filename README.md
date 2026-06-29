@@ -1,4 +1,4 @@
-# BeSchne Photometry
+# AAVSO Photometry
 
 ![PixInsight](https://img.shields.io/badge/PixInsight-1.9.4%2B-blue)
 ![AAVSO](https://img.shields.io/badge/AAVSO-Extended_Format-green)

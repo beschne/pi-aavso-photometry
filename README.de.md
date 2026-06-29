@@ -1,4 +1,4 @@
-# BeSchne Photometry
+# AAVSO Photometry
 
 ![PixInsight](https://img.shields.io/badge/PixInsight-1.9.4%2B-blue)
 ![AAVSO](https://img.shields.io/badge/AAVSO-Extended_Format-green)
@@ -13,7 +13,7 @@ direkt in PixInsight durchführt und einen **AAVSO Extended File Format**-Berich
 Aktuell konfiguriert für **T Coronae Borealis** ("Blaze Star"), eine rekurrente Nova,
 die sich von Ruhelage (~10 mag) bis Ausbruch (~2 mag) um ~8 Größenklassen aufhellt.
 
-Das Skript nutzt die eigenen PixInsight-Werkzeuge — die astrometrische WCS-Lösung,
+Das Skript nutzt die PixInsight-eigenen Werkzeuge — die astrometrische WCS-Lösung,
 FITS-Keywords und DynamicPSF — anstatt diese extern neu zu implementieren.
 
 ![Dialog und Verifikationsfenster](docs/screenshot%2C%20v1.0.0%2C%20with%20verification%20window.png)
@@ -58,7 +58,7 @@ Das Skript benötigt eine Photometrietabelle mit Vergleichssternen und ihren Kat
 6. **Photometrietabelle** → **Herunterladen** → als **CSV** speichern
 
 Die heruntergeladene Datei ist die Vergleichsstern-CSV.
-Eine Referenzkopie für Karte X42597QE ist unter `docs/X42597QE_photometry.csv` enthalten.
+Eine Referenzkopie für Karte X42597QE ist unter `docs/X42597QE_photometry.csv` zu finden.
 
 ### 3. Bild in PixInsight vorbereiten
 
@@ -135,9 +135,9 @@ Die Auswahl wird zwischen Sitzungen gespeichert.
 
 ### Phase 2 — Nova-Maximum (~2–6 mag): neue VSP-Karte laden
 
-Am Maximum sättigt T CrB bei normalen Belichtungszeiten. Sehr kurze Subframes
-(unter einer Sekunde) sind erforderlich; die schwachen Vergleichssterne aus X42597QE
-sind möglicherweise nicht mehr erfassbar.
+Am Maximum sättigt T CrB bei normalen Belichtungszeiten. Dann sind sehr kurze Subframes
+(unter einer Sekunde) erforderlich. Die schwachen Vergleichssterne aus X42597QE
+sind dann möglicherweise nicht mehr erfassbar.
 
 1. [AAVSO VSP](https://www.aavso.org/vsp) erneut aufrufen, Bildfeld **180′**,
    Grenzhelligkeit **5–6**
@@ -145,7 +145,7 @@ sind möglicherweise nicht mehr erfassbar.
 3. Über **Durchsuchen** laden und passende Comp/Check-Labels eingeben
 4. Konstante `CHART` im Skript (Zeile ~40) auf die neue Karten-ID aktualisieren
 
-AAVSO gibt bei Ausbruchsbeginn Alert Notices mit konkreten Karten- und
+AAVSO gibt bei Ausbruchsbeginn _Alert Notices_ mit konkreten Karten- und
 Belichtungsempfehlungen heraus — [aavso.org/news](https://www.aavso.org/news) beobachten.
 
 ---
@@ -157,7 +157,7 @@ Johnson V. TG ist für rote Sterne ~0,1–0,3 mag heller als V — relevant, da 
 M3-III-Begleiter hat, der in Ruhelage dominiert. Der AAVSO-Bericht enthält korrekt
 `FILT=TG` und `TRANS=NO`. TG-Messungen dürfen niemals als V deklariert werden.
 
-**Seestar-Gesichtsfeld bei Nova-Maximum.** Der Seestar S50 hat ein Gesichtsfeld von
+**Seestar-Gesichtsfeld bei Nova-Maximum.** Der Seestar S50 Pro hat ein Gesichtsfeld von
 ~1,4° × 1,0°. Bei Maximum (~2 mag) liegen die nächsten geeigneten Vergleichssterne
 (1–4 mag) möglicherweise außerhalb dieses Fensters. In diesem Fall empfiehlt sich ein
 Weitwinkelinstrument, visuelle Beobachtung oder Ensemble-Photometrie mit schwächeren
@@ -180,7 +180,7 @@ aus echten Subframes zu setzen.
 |------------------|---------|--------|
 | *Kein aktives Bildfenster* | Kein Stack geöffnet oder nicht aktiv | Master-Stack öffnen und Titelleiste anklicken |
 | *Kein Plate-Solve* | Keine WCS-Lösung gefunden | `Skript > Astronomie > ImageSolver` auf den Stack anwenden |
-| *RGB-Bild (3 Kanäle) erwartet* | Bild ist Graustufen oder Kanalextraktion | Vollständigen OSC-Master verwenden |
+| *RGB-Bild (3 Kanäle) erwartet* | Bild ist in Graustufen oder Kanalextraktion | Vollständigen OSC-Master verwenden |
 | *Stern außerhalb des Bildfeldes* | Comp- oder Check-Stern-Label nicht im Sichtfeld | Anderes Label im Dropdown wählen |
 | *PSF abgelehnt — zu schwach* | Stern zu schwach für Gauß-Fit | Helleres Comp/Check-Label wählen |
 | *PSF abgelehnt — gesättigt* | Stern im Master beschnitten | Schwächeres Comp/Check-Label wählen oder Belichtung kürzen |
