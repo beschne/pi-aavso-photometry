@@ -632,7 +632,6 @@ class PhotometryDialog extends Dialog {
 
       // ---- Internal state ----
       var _photDone  = false;
-      var _outPath   = "";
       var _startJD   = NaN;
       var _endJD     = NaN;
       var _midMode   = 0;       // 0=(Start+End)/2  1=Start  2=Manual
@@ -1211,18 +1210,6 @@ class PhotometryDialog extends Dialog {
       this.reportBox.setFixedHeight( 200 );
       this.reportBox.toolTip = "Generated report — review before exporting";
 
-      // ---- Export file row ----
-      var outLblTag = new Label( this );
-      outLblTag.text          = "Export to:";
-      outLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
-      outLblTag.setFixedWidth( 90 );
-
-      this.outEdit = new Edit( this );
-      this.outEdit.toolTip = "Output file path (.txt or .csv)";
-      this.outEdit.onTextUpdated = function() {
-         _outPath = self.outEdit.text.trim();
-      };
-
       this.outBrowseBtn = new PushButton( this );
       this.outBrowseBtn.text    = "Export...";
       this.outBrowseBtn.toolTip = "Choose a file and write the report";
@@ -1251,26 +1238,24 @@ class PhotometryDialog extends Dialog {
                  : File.systemTempDirectory );
          saveDlg.initialPath = lastDir + "/" + suggestedName;
          if ( saveDlg.execute() ) {
-            _outPath = saveDlg.filePath;
-            var ext = File.extractExtension( _outPath ).toLowerCase();
+            var outPath = saveDlg.filePath;
+            var ext = File.extractExtension( outPath ).toLowerCase();
             if ( ext !== ".txt" && ext !== ".csv" && ext !== ".tsv" )
-               _outPath += ".txt";
-            self.outEdit.text = _outPath;
-            File.writeTextFile( _outPath, _reportText );
+               outPath += ".txt";
+            File.writeTextFile( outPath, _reportText );
             Settings.write( SETTINGS_LAST_DIR, DataType_String,
-                            File.extractDirectory( _outPath ) );
+                            File.extractDirectory( outPath ) );
             const sep = "=".repeat(60);
             console.writeln( sep );
-            console.writeln( "Report exported to:\n  " + _outPath );
+            console.writeln( "Report exported to:\n  " + outPath );
             console.writeln( sep );
          }
       };
 
       var outRow = new HorizontalSizer;
-      outRow.spacing = 8;
-      outRow.add( outLblTag );
-      outRow.add( this.outEdit, 100 );
+      outRow.addStretch();
       outRow.add( this.outBrowseBtn );
+      outRow.addStretch();
 
       // ============================================================
       // Action buttons

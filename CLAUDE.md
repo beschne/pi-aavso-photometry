@@ -166,7 +166,7 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). S
 | **Run** | "Run Photometry" button |
 | **Results** | Derived T CrB magnitude + uncertainty; instrumental mags for target / comp / check |
 | **Timing** | First/last sub reference buttons; Start / End ISO fields + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat / Lon / Elev editable fields (pre-filled from FITS); airmass readout |
-| **Output** | Format RadioButtons (Human readable default, AAVSO Extended); "Create Report" button; scrollable read-only `TextBox` preview; "Export…" button (opens `SaveFileDialog`, writes immediately) |
+| **Output** | Format RadioButtons (Human readable default, AAVSO Extended); "Create Report" button (centred); scrollable read-only `TextBox` preview; "Export…" button (centred, opens `SaveFileDialog`, writes immediately) |
 | **Buttons** | "Close" button (`self.cancel()`) |
 
 **RadioButton grouping:** the mid-time group (`rbMidpoint`, `rbStart`, `rbManual`) and the format group (`rbHuman`, `rbAavso`) must have **different parent widgets** to avoid Qt's per-parent exclusive grouping silently unchecking `rbMidpoint` when `rbHuman.checked = true` is set. The format pair is parented to an intermediate `Control` (`fmtGrp`); the mid-time pair is parented directly to the dialog.
