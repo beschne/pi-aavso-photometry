@@ -70,6 +70,14 @@
 - [ ] TG→V transformation (`TRANS=YES`)
 - [ ] Multiband TB/TG (blue channel)
 
+### Security audit (needed before 1.0.0)
+- [ ] **Input validation** — validate all user-editable fields (lat/lon/elev, time fields, manual mid-time) before use; reject or clamp out-of-range values
+- [ ] **CSV content sanitisation** — star labels, AUIDs, and comments read from the CSV are written verbatim into the AAVSO report; verify no field can inject extra delimiters or newlines that corrupt the output format
+- [ ] **FITS keyword sanitisation** — values from `HISTORY`, `DATE-OBS`, site keywords are displayed in the dialog and/or written to the report; confirm they cannot inject HTML into `useRichText` labels or corrupt the report file
+- [ ] **File path handling** — stored CSV path and export path come from user input / Settings; confirm no path traversal or unintended overwrite is possible via `SaveFileDialog`
+- [ ] **No unintended network access** — confirm the script makes no outbound connections (PJSR can call `NetworkTransfer`; verify it is not used)
+- [ ] **Settings namespace isolation** — confirm `BeSchne/Photometry/…` keys cannot read or overwrite keys from other PixInsight scripts
+
 ### Documentation (needed before 1.0.0)
 - [ ] **README: screenshot** of the dialog (use `docs/screenshot, 28Jun26, initial version.png` or a fresher one)
 - [ ] **README: getting-started guide** — end-to-end from download to first submitted report (assumes no prior PixInsight scripting knowledge)
