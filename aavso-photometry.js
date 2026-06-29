@@ -206,12 +206,19 @@ function loadComparisonStars( csvPath ) {
       var comments = fields[7];
       var blended  = /blend|pair|combined/i.test( comments );
 
+      var magV = parseFloat( fields[5] );
+      if ( !isFinite( magV ) ) {
+         console.warningln( "CSV line " + lineNum + ": skipping star \"" + fields[3] +
+                            "\" — non-numeric magnitude \"" + fields[5] + "\"" );
+         continue;
+      }
+
       stars.push( {
          auid    : fields[0],
          ra      : sexagesimalToDeg( fields[1] ) * 15,  // hours → degrees
          dec     : sexagesimalToDeg( fields[2] ),        // already degrees
          label   : fields[3],
-         magV    : parseFloat( fields[5] ),
+         magV    : magV,
          error   : parseFloat( fields[6] ),
          blended : blended,
          comments: comments,
@@ -411,6 +418,8 @@ function isoToJD( iso ) {
    var h  = parseInt(   m[4], 10 );
    var mn = parseInt(   m[5], 10 );
    var s  = parseFloat( m[6]      );
+   if ( M < 1 || M > 12 || D < 1 || D > 31 || h > 23 || mn > 59 || s >= 61 )
+      return NaN;
    if ( M <= 2 ) { Y -= 1; M += 12; }
    var A = Math.floor( Y / 100 );
    var B = 2 - A + Math.floor( A / 4 );
@@ -475,6 +484,19 @@ function findKeyword( kws, name ) {
       if ( kws[i].name === name )
          return kws[i].value.replace( /['\s]/g, '' );
    return null;
+}
+
+// Remove characters that would corrupt the comma-delimited AAVSO report format.
+// Applied to every field sourced from CSV or FITS before interpolation into the data line.
+function sanitizeField( s ) {
+   return String( s ).replace( /[,\r\n]/g, " " ).trim();
+}
+
+// Parse a coordinate string and return the float value only if it is finite and
+// within [lo, hi]; otherwise return NaN so callers fall back to "na" or a warning.
+function parseCoord( s, lo, hi ) {
+   var v = parseFloat( s );
+   return ( isFinite(v) && v >= lo && v <= hi ) ? v : NaN;
 }
 
 // ============================================================
@@ -805,8 +827,8 @@ class PhotometryDialog extends Dialog {
          } else {
             self.midJDLbl.text  = format( "%.6f", mid );
             self.midISOLbl.text = jdToISO( mid ) + " UTC";
-            var lat = parseFloat( self.latEdit.text );
-            var lon = parseFloat( self.lonEdit.text );
+            var lat = parseCoord( self.latEdit.text, -90, 90 );
+            var lon = parseCoord( self.lonEdit.text, -180, 360 );
             if ( isNaN(lat) || isNaN(lon) ) {
                self.airmassLbl.text = "— (lat/lon not set)";
             } else {
@@ -818,8 +840,8 @@ class PhotometryDialog extends Dialog {
                }
             }
             var mp = moonPhase( mid );
-            var lat = parseFloat( self.latEdit.text );
-            var lon = parseFloat( self.lonEdit.text );
+            var lat = parseCoord( self.latEdit.text, -90, 90 );
+            var lon = parseCoord( self.lonEdit.text, -180, 360 );
             if ( !isNaN(lat) && !isNaN(lon) ) {
                var mAlt = moonAltitude( mid, lat, lon );
                self.moonLbl.text = mp + "%, "
@@ -1461,8 +1483,20 @@ class PhotometryDialog extends Dialog {
          if ( saveDlg.execute() ) {
             var outPath = saveDlg.filePath;
             var ext = File.extractExtension( outPath ).toLowerCase();
-            if ( ext !== ".txt" && ext !== ".csv" && ext !== ".tsv" )
+            if ( ext !== ".txt" && ext !== ".csv" && ext !== ".tsv" ) {
                outPath += ".txt";
+               // The dialog's overwritePrompt fired for the name without extension.
+               // Re-check now that .txt has been appended — a pre-existing file
+               // would otherwise be silently overwritten.
+               if ( File.exists( outPath ) ) {
+                  var answer = new MessageBox(
+                     outPath + " already exists. Overwrite?",
+                     TITLE, StdIcon.Warning, StdButton.Yes, StdButton.No
+                  ).execute();
+                  if ( answer !== StdButton.Yes )
+                     return;
+               }
+            }
             File.writeTextFile( outPath, _reportText );
             Settings.write( SETTINGS_LAST_DIR, DataType_String,
                             File.extractDirectory( outPath ) );
@@ -1828,8 +1862,8 @@ class PhotometryDialog extends Dialog {
       function generateReport() {
          var midJD = self.midJD;
          var amassStr;
-         var lat = parseFloat( self.latEdit.text );
-         var lon = parseFloat( self.lonEdit.text );
+         var lat = parseCoord( self.latEdit.text, -90, 90 );
+         var lon = parseCoord( self.lonEdit.text, -180, 360 );
          if ( isNaN(lat) || isNaN(lon) ) {
             amassStr = "na";
          } else {
@@ -1912,12 +1946,13 @@ class PhotometryDialog extends Dialog {
             format( "%.3f", _tcrb_mag  ),
             format( "%.3f", _merr      ),
             "TG", "NO", "STD",
-            _compStar.auid,
+            sanitizeField( _compStar.auid  ),   // from CSV
             format( "%.4f", _instMag_C ),
-            _checkStar.auid,
+            sanitizeField( _checkStar.auid ),   // from CSV
             kmag,
             amassStr,
-            "na", CHART, notes,
+            "na", CHART,
+            sanitizeField( notes ),             // contains CSV labels + FITS NCOMBINE
          ].join( "," );
          return headerLines.join( "\n" ) + "\n" + dataLine + "\n";
       }
