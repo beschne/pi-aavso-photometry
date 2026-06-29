@@ -113,11 +113,9 @@ TODO.md                      Build checklist and roadmap
 
 ## Author
 
-<br/><br/>
+Benno Schneider · AAVSO observer code **BSLA**
 
 <img src="docs/astrophotography%20and%20photometry%20meme.png" width="800"/>
-
-Benno Schneider · AAVSO observer code **BSLA**
 
 ---
 
