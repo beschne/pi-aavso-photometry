@@ -30,7 +30,7 @@ them externally.
 - **PixInsight menu category:** `BeSchne` (for Benno Schneider). Feature header: `#feature-id BeSchne > Photometry`.
 - **File name:** `beschne-photometry.js` — lower-case, hyphenated, not target-specific.
 - **Settings namespace:** `BeSchne/<Script>/<key>`, e.g. `BeSchne/Photometry/comparisonCsvPath`.
-- **Human-facing strings** (TITLE/VERSION constants, dialog title): "BeSchne Photometry".
+- **Human-facing strings** (TITLE/VERSION constants, dialog title): "AAVSO Photometry".
 
 ## Scripts
 

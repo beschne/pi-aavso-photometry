@@ -1,6 +1,6 @@
 #engine v8
 
-#feature-id    BeSchne > Photometry
+#feature-id    BeSchne > AAVSO Photometry
 
 #feature-info  Differential photometry of variable stars. Measures the target \
                against CSV comparison stars and writes an AAVSO Extended File \
@@ -16,7 +16,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // Constants — tune here, not inside functions
 // ============================================================
 
-const TITLE   = "BeSchne Photometry";
+const TITLE   = "AAVSO Photometry";
 const VERSION = "0.1.0";
 
 // --- Target star -------------------------------------------------
