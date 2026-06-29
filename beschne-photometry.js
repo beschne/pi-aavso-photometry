@@ -72,8 +72,9 @@ const PSF_BOX_HALF = 10;
 const MAX_CENTROID_DRIFT_PX = 5.0;
 
 // --- Settings keys -----------------------------------------------
-const SETTINGS_NS  = "BeSchne/Photometry";
-const SETTINGS_CSV = SETTINGS_NS + "/comparisonCsvPath";
+const SETTINGS_NS       = "BeSchne/Photometry";
+const SETTINGS_CSV      = SETTINGS_NS + "/comparisonCsvPath";
+const SETTINGS_LAST_DIR = SETTINGS_NS + "/lastExportDir";
 
 // ============================================================
 // CSV parsing
@@ -1128,9 +1129,18 @@ class PhotometryDialog extends Dialog {
             ["Text file", "*.txt"],
             ["CSV file",  "*.csv"],
          ];
-         saveDlg.initialPath = (_window && !_window.isNull && _window.filePath)
-            ? File.extractDirectory( _window.filePath )
-            : File.systemTempDirectory;
+         var dateStr = !isNaN(self.midJD)
+            ? jdToISO( self.midJD ).substring( 0, 10 )   // "YYYY-MM-DD"
+            : format( "%04d-%02d-%02d",
+                 (new Date).getFullYear(),
+                 (new Date).getMonth() + 1,
+                 (new Date).getDate() );
+         var suggestedName = "tcrb_photometry_" + dateStr;
+         var lastDir = Settings.read( SETTINGS_LAST_DIR, DataType_String )
+            || ( (_window && !_window.isNull && _window.filePath)
+                 ? File.extractDirectory( _window.filePath )
+                 : File.systemTempDirectory );
+         saveDlg.initialPath = lastDir + "/" + suggestedName;
          if ( saveDlg.execute() ) {
             _outPath = saveDlg.filePath;
             var ext = File.extractExtension( _outPath ).toLowerCase();
@@ -1138,6 +1148,8 @@ class PhotometryDialog extends Dialog {
                _outPath += ".txt";
             self.outEdit.text = _outPath;
             File.writeTextFile( _outPath, _reportText );
+            Settings.write( SETTINGS_LAST_DIR, DataType_String,
+                            File.extractDirectory( _outPath ) );
             const sep = "=".repeat(60);
             console.writeln( sep );
             console.writeln( "Report exported to:\n  " + _outPath );
