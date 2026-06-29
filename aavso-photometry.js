@@ -628,6 +628,7 @@ class PhotometryDialog extends Dialog {
       var _photDone   = false;
       var _compStar   = null;   // set by runPhotometry(); used by generateReport()
       var _checkStar  = null;
+      var _csvUsable  = [];     // sorted non-blended V-band stars; drives the ComboBoxes
       var _startJD    = NaN;
       var _endJD     = NaN;
       var _midMode   = 0;       // 0=(Start+End)/2  1=Start  2=Manual
@@ -778,6 +779,10 @@ class PhotometryDialog extends Dialog {
             _csvPath = dlg.filePath;
             self.csvEdit.text = _csvPath;
             Settings.write( SETTINGS_CSV, DataType_String, _csvPath );
+            try {
+               var _browseStars = loadComparisonStars( _csvPath );
+               populateStarCombos( _browseStars.filter( s => !s.blended ) );
+            } catch(e) { /* error surfaced at Run */ }
          }
       };
 
@@ -787,38 +792,75 @@ class PhotometryDialog extends Dialog {
       csvRow.add( this.csvEdit, 100 );
       csvRow.add( this.csvBrowseBtn );
 
-      // ---- Comp / check label selectors ----
+      // ---- Comp / check ComboBox selectors ----
+      // Populated by populateStarCombos() when the CSV is loaded.
+      // Items are sorted brightest-first so outburst comps (79, 84) appear at the top.
+      function populateStarCombos( usable ) {
+         // Remember current label selections before clearing
+         var prevComp  = ( _csvUsable.length > 0 && self.compCombo.currentItem  >= 0 )
+                         ? _csvUsable[ self.compCombo.currentItem  ].label : null;
+         var prevCheck = ( _csvUsable.length > 0 && self.checkCombo.currentItem >= 0 )
+                         ? _csvUsable[ self.checkCombo.currentItem ].label : null;
+         if ( !prevComp  ) prevComp  = Settings.read( SETTINGS_COMP_LABEL,  DataType_String ) || DEFAULT_COMP_LABEL;
+         if ( !prevCheck ) prevCheck = Settings.read( SETTINGS_CHECK_LABEL, DataType_String ) || DEFAULT_CHECK_LABEL;
+
+         _csvUsable = usable.slice().sort( function(a,b) { return a.magV - b.magV; } );
+
+         while ( self.compCombo.numberOfItems  > 0 ) self.compCombo.removeItem(  0 );
+         while ( self.checkCombo.numberOfItems > 0 ) self.checkCombo.removeItem( 0 );
+
+         _csvUsable.forEach( function(s) {
+            var text = s.label + "  (" + format( "%.3f", s.magV ) + " V)";
+            self.compCombo.addItem( text );
+            self.checkCombo.addItem( text );
+         } );
+
+         var compIdx  = _csvUsable.findIndex( s => s.label === prevComp  );
+         var checkIdx = _csvUsable.findIndex( s => s.label === prevCheck );
+         self.compCombo.currentItem  = compIdx  >= 0 ? compIdx  : 0;
+         self.checkCombo.currentItem = checkIdx >= 0 ? checkIdx : Math.min( 1, _csvUsable.length - 1 );
+      }
+
       var compLblTag = new Label( this );
-      compLblTag.text          = "Comp label:";
+      compLblTag.text          = "Comp:";
       compLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       compLblTag.setFixedWidth( 110 );
 
-      this.compLabelEdit = new Edit( this );
-      this.compLabelEdit.text      = Settings.read( SETTINGS_COMP_LABEL,  DataType_String ) || DEFAULT_COMP_LABEL;
-      this.compLabelEdit.setFixedWidth( 50 );
-      this.compLabelEdit.toolTip   = "Chart label of the comparison star (e.g. 98, 84, 79)";
+      this.compCombo = new ComboBox( this );
+      this.compCombo.setMinWidth( 160 );
+      this.compCombo.toolTip = "Comparison star — select from non-blended V-band stars in the loaded CSV";
+      this.compCombo.onItemSelected = function( idx ) {
+         if ( idx >= 0 && idx < _csvUsable.length )
+            Settings.write( SETTINGS_COMP_LABEL, DataType_String, _csvUsable[idx].label );
+      };
 
       var checkLblTag = new Label( this );
-      checkLblTag.text          = "Check label:";
+      checkLblTag.text          = "Check:";
       checkLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
 
-      this.checkLabelEdit = new Edit( this );
-      this.checkLabelEdit.text    = Settings.read( SETTINGS_CHECK_LABEL, DataType_String ) || DEFAULT_CHECK_LABEL;
-      this.checkLabelEdit.setFixedWidth( 50 );
-      this.checkLabelEdit.toolTip = "Chart label of the check star (e.g. 106, 98)";
+      this.checkCombo = new ComboBox( this );
+      this.checkCombo.setMinWidth( 160 );
+      this.checkCombo.toolTip = "Check star — must differ from comp; used as independent quality indicator";
+      this.checkCombo.onItemSelected = function( idx ) {
+         if ( idx >= 0 && idx < _csvUsable.length )
+            Settings.write( SETTINGS_CHECK_LABEL, DataType_String, _csvUsable[idx].label );
+      };
 
-      this.availableStarsLbl = new Label( this );
-      this.availableStarsLbl.text    = "Available: —";
-      this.availableStarsLbl.toolTip = "Non-blended V-band stars in the loaded CSV (populated after Run Photometry)";
+      // Pre-populate if a valid CSV path is already persisted
+      if ( _csvPath && File.exists( _csvPath ) ) {
+         try {
+            var _initStars = loadComparisonStars( _csvPath );
+            populateStarCombos( _initStars.filter( s => !s.blended ) );
+         } catch(e) { /* silently ignore — error will surface at Run */ }
+      }
 
       var compRow = new HorizontalSizer;
       compRow.spacing = 8;
-      compRow.add( compLblTag           );
-      compRow.add( this.compLabelEdit   );
-      compRow.add( checkLblTag          );
-      compRow.add( this.checkLabelEdit  );
+      compRow.add( compLblTag       );
+      compRow.add( this.compCombo   );
       compRow.addSpacing( 12 );
-      compRow.add( this.availableStarsLbl );
+      compRow.add( checkLblTag      );
+      compRow.add( this.checkCombo  );
       compRow.addStretch();
 
       // ============================================================
@@ -1457,27 +1499,12 @@ class PhotometryDialog extends Dialog {
                                " (" + s.auid + ") — " + s.comments )
          );
 
-         // Populate available-stars display and look up selected comp/check
-         var availStr = usable.map( function(s) {
-            return s.label + " (" + format( "%.1f", s.magV ) + "V)";
-         } ).join( ",  " );
-         self.availableStarsLbl.text = "Available: " + ( availStr || "—" );
-
-         var compLabel  = self.compLabelEdit.text.trim()  || DEFAULT_COMP_LABEL;
-         var checkLabel = self.checkLabelEdit.text.trim() || DEFAULT_CHECK_LABEL;
-         var compStar   = usable.find( s => s.label === compLabel  );
-         var checkStar  = usable.find( s => s.label === checkLabel );
-         if ( !compStar )
-            throw new Error( "Comparison star label \"" + compLabel +
-                             "\" not found or excluded in: " + _csvPath +
-                             "\nAvailable: " + availStr );
-         if ( !checkStar )
-            throw new Error( "Check star label \"" + checkLabel +
-                             "\" not found or excluded in: " + _csvPath +
-                             "\nAvailable: " + availStr );
-
-         Settings.write( SETTINGS_COMP_LABEL,  DataType_String, compLabel  );
-         Settings.write( SETTINGS_CHECK_LABEL, DataType_String, checkLabel );
+         // Refresh ComboBoxes and read selected comp/check stars
+         populateStarCombos( usable );
+         var compStar  = _csvUsable[ self.compCombo.currentItem  ];
+         var checkStar = _csvUsable[ self.checkCombo.currentItem ];
+         if ( !compStar  ) throw new Error( "No comparison star selected." );
+         if ( !checkStar ) throw new Error( "No check star selected." );
 
          // Project to pixels
          var targetPix = celestialToPixel( metadata, TARGET.ra, TARGET.dec );

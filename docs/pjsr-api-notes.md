@@ -164,6 +164,24 @@ var frames = Math.round( maxTot / parseFloat( String( frameExp ) ) );
 
 **`PixInsight:ProcessingHistory` is NOT loaded into the in-memory view.** It exists in the XISF file on disk (accessible via Python/XML parsing) but `view.propertyValue("PixInsight:ProcessingHistory")` returns `null`. Do not rely on it from PJSR.
 
+## ComboBox
+
+```js
+this.myCombo = new ComboBox( this );
+this.myCombo.setMinWidth( 160 );
+this.myCombo.addItem( "item text" );         // append one item
+this.myCombo.removeItem( 0 );                // remove item at index
+this.myCombo.currentItem = 2;               // set selected index (integer)
+// this.myCombo.currentItem                 // read selected index
+this.myCombo.numberOfItems;                 // item count
+this.myCombo.itemText( idx );               // text of item at index
+this.myCombo.onItemSelected = function( idx ) { /* idx is the new selection */ };
+```
+
+To clear all items: `while ( combo.numberOfItems > 0 ) combo.removeItem( 0 );`
+
+`onItemSelected` fires when `currentItem` is set programmatically as well as by the user — guard against spurious writes in repopulation loops if needed.
+
 ## Non-ASCII characters in `format()` format strings
 
 **Do not embed non-ASCII (non-Latin-1) characters directly inside a `format()` format string.** PJSR's `format()` is a C printf wrapper; multi-byte UTF-8 characters in the format string itself (not in string arguments) can cause it to misinterpret argument counts or types, resulting in an out-of-memory crash or silent wrong output.

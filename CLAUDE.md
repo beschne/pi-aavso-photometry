@@ -162,7 +162,7 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). S
 |---------|----------|
 | **Header** | Title label; "Benno Schneider © 2026" credit |
 | **Preconditions** | Three `Label` controls with ✓/✗ icon prefixes (Required / Incompatible / Safe); `warningLbl` (hidden until Run is clicked) shows detected forbidden processes in red bold HTML |
-| **Input** | Active image name (read-only); comparison CSV path + Browse button; Comp label / Check label edit fields (default `98`/`106`, persisted); "Available:" label listing non-blended V-band stars after Run |
+| **Input** | Active image name (read-only); comparison CSV path + Browse button; **Comp** and **Check** ComboBoxes populated from the CSV (non-blended V-band stars, sorted brightest-first; selection persisted in Settings; populated on Browse and on dialog open if CSV path is already set) |
 | **Run** | "Run Photometry" button |
 | **Results** | Derived T CrB magnitude + uncertainty; instrumental mags for target / comp / check |
 | **Timing** | First/last sub reference buttons; Start / End ISO fields + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat / Lon / Elev editable fields (pre-filled from FITS); airmass readout |
