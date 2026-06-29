@@ -1,5 +1,10 @@
 # BeSchne Photometry
 
+> **Work in progress — not yet ready for general use.**
+> The script is functional for the author's own observations but lacks complete
+> documentation, a full security audit, and end-to-end testing by other observers.
+> Target release: **v1.0.0** (see [TODO.md](TODO.md) for remaining items).
+
 A native **PixInsight PJSR script** that performs differential photometry of variable
 stars directly inside PixInsight and writes an **AAVSO Extended File Format** report.
 
