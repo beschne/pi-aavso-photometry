@@ -802,8 +802,9 @@ class PhotometryDialog extends Dialog {
       var _merr      = NaN;
       var _instMag_T   = null;
       var _instMag_C   = null;
-      var _instMag_K   = null;    // null = check star not available
-      var _reportText  = "";      // last generated report text; "" = not yet created
+      var _instMag_K       = null;  // null = check star not available
+      var _checkGateWarn   = false; // true when check-star deviation > 3×MERR
+      var _reportText  = "";        // last generated report text; "" = not yet created
 
       // ---- Public result ----
       this.midJD = NaN;
@@ -908,6 +909,10 @@ class PhotometryDialog extends Dialog {
       this.linearityLbl = new Label( this );
       this.linearityLbl.useRichText = true;
       this.linearityLbl.visible     = false;
+
+      this.checkGateLbl = new Label( this );
+      this.checkGateLbl.useRichText = true;
+      this.checkGateLbl.visible     = false;
 
       // ============================================================
       // Input — active image + comparison CSV
@@ -1560,9 +1565,10 @@ class PhotometryDialog extends Dialog {
       this.sizer.add( runRow   );
 
       // Results
-      this.sizer.add( hSep()    );
-      this.sizer.add( magRow    );
-      this.sizer.add( instRow   );
+      this.sizer.add( hSep()             );
+      this.sizer.add( magRow             );
+      this.sizer.add( instRow            );
+      this.sizer.add( this.checkGateLbl  );
 
       // Timing
       this.sizer.add( hSep()      );
@@ -1592,13 +1598,15 @@ class PhotometryDialog extends Dialog {
       // ============================================================
 
       function runPhotometry() {
-         _photDone  = false;
-         _instMag_T = null;
-         _instMag_C = null;
-         _instMag_K = null;
-         self.magLbl.text  = "—";
-         self.merrLbl.text = "—";
-         self.instLbl.text = "—";
+         _photDone        = false;
+         _instMag_T       = null;
+         _instMag_C       = null;
+         _instMag_K       = null;
+         _checkGateWarn   = false;
+         self.magLbl.text          = "—";
+         self.merrLbl.text         = "—";
+         self.instLbl.text         = "—";
+         self.checkGateLbl.visible = false;
          checkWriteEnabled();
 
          _window = ImageWindow.activeWindow;
@@ -1838,10 +1846,19 @@ class PhotometryDialog extends Dialog {
             console.writeln( "  Check star: derived " + format( "%.3f", checkStd ) +
                              " vs catalogue V=" + format( "%.3f", checkStar.magV ) +
                              " -> deviation " + format( "%.3f", checkDev ) + " mag" );
-            if ( checkDev > 3.0 * _merr )
+            if ( checkDev > 3.0 * _merr ) {
+               _checkGateWarn = true;
                console.warningln( "  Check star deviation (" + format( "%.3f", checkDev ) +
                                   ") is > 3x MERR (" + format( "%.3f", _merr ) +
                                   ") -- possible systematic error." );
+               self.checkGateLbl.text =
+                  "<b><font color='#cc6600'>⚠  Check star " + checkStar.label +
+                  ": deviation " + format( "%.3f", checkDev ) + " mag" +
+                  " &gt; 3× MERR (" + format( "%.3f", _merr ) + ")" +
+                  " — possible systematic error (atmosphere, wrong star, blending)." +
+                  " Review before submitting.</font></b>";
+               self.checkGateLbl.visible = true;
+            }
          }
 
          // Update results display

@@ -63,7 +63,7 @@
   - [x] Supplement with green-channel median heuristic: linear master typically < 0.05; stretched image typically > 0.15
   - [x] Nudge user to save master stack before running (so HISTORY keywords are present) — static precondition line in the dialog
 - [x] Annotated verification image (thumbnail with target + comp/check marked)
-- [ ] Check-star gate: warn if (K−C) deviation exceeds threshold before writing
+- [x] Check-star gate: warn if (K−C) deviation exceeds threshold before writing
 - [x] Real `MERR`: Poisson + sky-background noise (PSF MAD residuals propagated via matched-filter formula)
 
 ### Security audit (needed before 1.0.0)
