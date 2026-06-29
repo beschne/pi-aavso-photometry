@@ -111,7 +111,7 @@ TODO.md                      Build checklist and roadmap
 - Ensemble photometry
 - TG→V transformation
 
-![meme](docs/astrophotography%20and%20photometry%20meme.png)
+<img src="docs/astrophotography%20and%20photometry%20meme.png" width="800"/>
 
 ## Author
 
