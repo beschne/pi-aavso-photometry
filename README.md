@@ -1,5 +1,10 @@
 # BeSchne Photometry
 
+![vibe coded](https://img.shields.io/badge/vibe_coded-Claude_Sonnet-blueviolet)
+![PixInsight](https://img.shields.io/badge/PixInsight-1.9.4%2B-blue)
+![AAVSO](https://img.shields.io/badge/AAVSO-Extended_Format-green)
+![platform](https://img.shields.io/badge/platform-macOS_%7C_Windows_%7C_Linux-lightgrey)
+
 > **Work in progress — not yet ready for general use.**
 > The script is functional for the author's own observations but lacks complete
 > documentation, a full security audit, and end-to-end testing by other observers.
@@ -109,3 +114,7 @@ TODO.md                      Build checklist and roadmap
 ## Author
 
 Benno Schneider · AAVSO observer code **BSLA**
+
+---
+
+🤖 Generated with [Claude Code](https://claude.ai/claude-code)
