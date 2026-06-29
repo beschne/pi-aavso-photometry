@@ -2,10 +2,16 @@
 
 #feature-id    BeSchne > AAVSO Photometry
 
-#feature-info  Differential photometry of variable stars. Measures the target \
-               against CSV comparison stars and writes an AAVSO Extended File \
-               Format report. Currently configured for T Coronae Borealis \
-               (the "Blaze Star").
+#feature-info  Differential photometry of variable stars directly inside \
+               PixInsight. Requires a linear, plate-solved OSC RGB master \
+               stack and a comparison-star CSV from AAVSO VSP. Fits PSFs via \
+               DynamicPSF (green channel, TG band), derives the target \
+               magnitude from one comp star, checks quality against a check \
+               star, and writes an AAVSO Extended File Format report. \
+               Currently configured for T Coronae Borealis (the Blaze Star). \
+               Observer site coordinates are read automatically from FITS \
+               keywords. See the project README on GitHub for a full \
+               getting-started guide.
 
 #include <pjsr/DataType.jsh>
 #include <pjsr/UndoFlag.jsh>
@@ -18,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "0.5.0";
+const VERSION = "1.0.0";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -49,6 +55,9 @@ const OBSTYPE = "CCD";    // Seestar is a dedicated astronomy camera, not a cons
 // fit → star is flagged as saturated/clipped.
 // Calibrate once against a known clipped star.
 const SATURATION_FRACTION = 0.90;
+
+// Separator line used in console output.
+const SEP = "=".repeat( 60 );
 
 // DynamicPSF MAD residual above this level indicates a poor fit.
 // Combined with a high peak → probable clipping/saturation.
@@ -714,8 +723,6 @@ function createVerificationImage( win, targetPix, compStar, compPix, checkStar, 
                     : 0;
       var arg   = med - c0;
       var mVal  = ( arg > 0 && arg < 1 ) ? Math.mtf( 0.25, arg ) : 0.25;
-      console.writeln( format( "Verification stretch: med=%.5f  sigma=%.5f  c0=%.5f  mVal=%.5f",
-                               med, sigma, c0, mVal ) );
 
       // H format: [shadows, midtones, highlights, r0, r1] — 5 rows required.
       var ht = new HistogramTransformation;
@@ -841,8 +848,6 @@ class PhotometryDialog extends Dialog {
                }
             }
             var mp = moonPhase( mid );
-            var lat = parseCoord( self.latEdit.text, -90, 90 );
-            var lon = parseCoord( self.lonEdit.text, -180, 360 );
             if ( !isNaN(lat) && !isNaN(lon) ) {
                var mAlt = moonAltitude( mid, lat, lon );
                self.moonLbl.text = mp + "%, "
@@ -925,6 +930,9 @@ class PhotometryDialog extends Dialog {
 
       this.imageLbl = new Label( this );
       this.imageLbl.useRichText = true;
+      this.imageLbl.toolTip     = "The image window that will be measured. Must be a linear, " +
+                                  "plate-solved OSC RGB master stack. Make it the active window " +
+                                  "before running the script.";
       this.imageLbl.text = (_window && !_window.isNull)
          ? _window.mainView.id
          : "<font color='#cc2222'>(no active window)</font>";
@@ -946,7 +954,8 @@ class PhotometryDialog extends Dialog {
       this.csvEdit.onTextUpdated = function() { _csvPath = self.csvEdit.text.trim(); };
 
       this.csvBrowseBtn = new PushButton( this );
-      this.csvBrowseBtn.text = "Browse...";
+      this.csvBrowseBtn.text    = "Browse...";
+      this.csvBrowseBtn.toolTip = "Open a comparison-star CSV exported from AAVSO VSP";
       this.csvBrowseBtn.onClick = function() {
          var dlg = new OpenFileDialog;
          dlg.caption = "Select comparison-star CSV (AAVSO VSP export)";
@@ -1070,7 +1079,10 @@ class PhotometryDialog extends Dialog {
       magTag.setFixedWidth( 60 );
 
       this.magLbl = new Label( this );
-      this.magLbl.text = "—";
+      this.magLbl.text    = "—";
+      this.magLbl.toolTip = "Derived TG magnitude of " + TARGET.name + " from differential photometry " +
+                            "against the selected comp star. TG (tri-colour green) is not Johnson V — " +
+                            "it runs ~0.1–0.3 mag brighter for red stars.";
       this.magLbl.setFixedWidth( 72 );
 
       var merrTag = new Label( this );
@@ -1078,7 +1090,10 @@ class PhotometryDialog extends Dialog {
       merrTag.textAlignment = TextAlignment.VertCenter;
 
       this.merrLbl = new Label( this );
-      this.merrLbl.text = "—";
+      this.merrLbl.text    = "—";
+      this.merrLbl.toolTip = "Photometric magnitude error: target and comp PSF noise added in quadrature " +
+                             "via matched-filter formula (Poisson + sky background). Typical value 0.003–0.010 " +
+                             "for a 20–25 frame Seestar stack of a ~10 mag target.";
 
       var magRow = new HorizontalSizer;
       magRow.spacing = 8;
@@ -1094,7 +1109,10 @@ class PhotometryDialog extends Dialog {
       instTag.setFixedWidth( 80 );
 
       this.instLbl = new Label( this );
-      this.instLbl.text = "—";
+      this.instLbl.text    = "—";
+      this.instLbl.toolTip = "Instrumental magnitudes: T = target, C = comp, K = check star. " +
+                             "Values are −2.5·log10(PSF flux) — they can be negative for bright stars. " +
+                             "CMAG and KMAG in the AAVSO report carry these instrumental values.";
 
       var instRow = new HorizontalSizer;
       instRow.spacing = 8;
@@ -1173,7 +1191,8 @@ class PhotometryDialog extends Dialog {
       startJDTag.text = "JD:";
 
       this.startJDLbl = new Label( this );
-      this.startJDLbl.text = "—";
+      this.startJDLbl.text    = "—";
+      this.startJDLbl.toolTip = "Julian Day of the session start time (read-only)";
       this.startJDLbl.setFixedWidth( 130 );
 
       var startRow = new HorizontalSizer;
@@ -1201,7 +1220,8 @@ class PhotometryDialog extends Dialog {
       endJDTag.text = "JD:";
 
       this.endJDLbl = new Label( this );
-      this.endJDLbl.text = "—";
+      this.endJDLbl.text    = "—";
+      this.endJDLbl.toolTip = "Julian Day of the session end time (read-only)";
       this.endJDLbl.setFixedWidth( 130 );
 
       var endRow = new HorizontalSizer;
@@ -1292,7 +1312,8 @@ class PhotometryDialog extends Dialog {
       midJDTag.setFixedWidth( 90 );
 
       this.midJDLbl = new Label( this );
-      this.midJDLbl.text = "—";
+      this.midJDLbl.text    = "—";
+      this.midJDLbl.toolTip = "Mid-exposure Julian Day — this value is written to the AAVSO DATE field";
       this.midJDLbl.setFixedWidth( 130 );
 
       var midJDRow = new HorizontalSizer;
@@ -1307,7 +1328,8 @@ class PhotometryDialog extends Dialog {
       midISOTag.setFixedWidth( 90 );
 
       this.midISOLbl = new Label( this );
-      this.midISOLbl.text = "—";
+      this.midISOLbl.text    = "—";
+      this.midISOLbl.toolTip = "Mid-exposure time in UTC — human-readable equivalent of Mid JD";
 
       var midISORow = new HorizontalSizer;
       midISORow.spacing = 8;
@@ -1375,7 +1397,10 @@ class PhotometryDialog extends Dialog {
       airmassTag.setFixedWidth( 90 );
 
       this.airmassLbl = new Label( this );
-      this.airmassLbl.text = "—";
+      this.airmassLbl.text    = "—";
+      this.airmassLbl.toolTip = "Airmass at mid-exposure (Kasten & Young 1989 formula). " +
+                                "Computed from mid-JD, observer lat/lon, and target J2000 position. " +
+                                "Shows 'na' if lat or lon is blank or out of range.";
 
       var airmassRow = new HorizontalSizer;
       airmassRow.spacing = 8;
@@ -1473,12 +1498,10 @@ class PhotometryDialog extends Dialog {
             ["Text file", "*.txt"],
             ["CSV file",  "*.csv"],
          ];
+         var _now    = new Date;
          var dateStr = !isNaN(self.midJD)
             ? jdToISO( self.midJD ).substring( 0, 10 )   // "YYYY-MM-DD"
-            : format( "%04d-%02d-%02d",
-                 (new Date).getFullYear(),
-                 (new Date).getMonth() + 1,
-                 (new Date).getDate() );
+            : format( "%04d-%02d-%02d", _now.getFullYear(), _now.getMonth() + 1, _now.getDate() );
          var suggestedName = "tcrb_photometry_" + dateStr;
          var lastDir = Settings.read( SETTINGS_LAST_DIR, DataType_String )
             || ( (_window && !_window.isNull && _window.filePath)
@@ -1505,10 +1528,9 @@ class PhotometryDialog extends Dialog {
             File.writeTextFile( outPath, _reportText );
             Settings.write( SETTINGS_LAST_DIR, DataType_String,
                             File.extractDirectory( outPath ) );
-            const sep = "=".repeat(60);
-            console.writeln( sep );
+            console.writeln( SEP );
             console.writeln( "Report exported to:\n  " + outPath );
-            console.writeln( sep );
+            console.writeln( SEP );
          }
       };
 
@@ -1521,11 +1543,27 @@ class PhotometryDialog extends Dialog {
       // Action buttons
       // ============================================================
 
+      this.helpBtn = new ToolButton( this );
+      this.helpBtn.icon    = this.scaledResource( ":/process-interface/browse-documentation.png" );
+      this.helpBtn.setScaledFixedSize( 20, 20 );
+      this.helpBtn.toolTip = "Open script documentation";
+      this.helpBtn.onClick = function() {
+         new MessageBox(
+            "<p><b>AAVSO Photometry v" + VERSION + "</b></p>" +
+            "<p>Full documentation and getting-started guide:</p>" +
+            "<p><a href='https://github.com/beschne/pi-aavso-photometry'>" +
+            "github.com/beschne/pi-aavso-photometry</a></p>",
+            TITLE, StdIcon.Information, StdButton.Ok
+         ).execute();
+      };
+
       this.closeBtn = new PushButton( this );
       this.closeBtn.text    = "Close";
+      this.closeBtn.toolTip = "Close the dialog";
       this.closeBtn.onClick = function() { self.cancel(); };
 
       var btnRow = new HorizontalSizer;
+      btnRow.add( this.helpBtn );
       btnRow.addStretch();
       btnRow.add( this.closeBtn );
 
@@ -1704,10 +1742,9 @@ class PhotometryDialog extends Dialog {
          if ( !_csvPath || !File.exists( _csvPath ) )
             throw new Error( "Comparison CSV not found — use Browse to select it." );
 
-         const sep = "=".repeat(60);
-         console.writeln( sep );
+         console.writeln( SEP );
          console.writeln( TITLE + " v" + VERSION + " — Run Photometry" );
-         console.writeln( sep );
+         console.writeln( SEP );
 
          // Astrometry
          var metadata = loadAstrometry( _window );
@@ -1854,9 +1891,9 @@ class PhotometryDialog extends Dialog {
                self.checkGateLbl.text =
                   "<b><font color='#cc6600'>⚠  Check star " + checkStar.label +
                   ": deviation " + format( "%.3f", checkDev ) + " mag" +
-                  " &gt; 3× MERR (" + format( "%.3f", _merr ) + ")" +
-                  " — possible systematic error (atmosphere, wrong star, blending)." +
-                  " Review before submitting.</font></b>";
+                  " &gt; 3× MERR (" + format( "%.3f", _merr ) + ")<br/>" +
+                  "Possible systematic error — wrong star, blending, or atmospheric gradient." +
+                  "</font></b>";
                self.checkGateLbl.visible = true;
             }
          }

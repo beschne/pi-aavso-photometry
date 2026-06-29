@@ -75,21 +75,22 @@
 - [ ] **Settings namespace isolation** — confirm `BeSchne/Photometry/…` keys cannot read or overwrite keys from other PixInsight scripts
 
 ### PixInsight script documentation (needed before 1.0.0)
-- [ ] **`#feature-info` text** — the one-paragraph description shown in `Script > Feature Scripts` should be complete and accurate (currently minimal)
-- [ ] **In-dialog tooltips** — add `toolTip` text to every control (CSV path, Comp/Check combos, time fields, lat/lon/elev, mid-time radio buttons, report format radio buttons) so hovering explains each field
-- [ ] **Process Console banner** — verify the startup banner (script name, version, brief purpose) is clear enough for a new user reading the console
+- [x] **`#feature-info` text** — the one-paragraph description shown in `Script > Feature Scripts` should be complete and accurate (currently minimal)
+- [x] **In-dialog tooltips** — add `toolTip` text to every control (CSV path, Comp/Check combos, time fields, lat/lon/elev, mid-time radio buttons, report format radio buttons) so hovering explains each field
+- [x] **Process Console banner** — verify the startup banner (script name, version, brief purpose) is clear enough for a new user reading the console
 
 ### Documentation (needed before 1.0.0)
-- [ ] **README: screenshot** of the dialog (use `docs/screenshot, 28Jun26, initial version.png` or a fresher one)
-- [ ] **README: getting-started guide** — end-to-end from download to first submitted report (assumes no prior PixInsight scripting knowledge)
-- [ ] **README: how to get the comparison-star CSV** from AAVSO VSP (URL, field-of-view setting, magnitude limit, download as CSV)
-- [ ] **README: how to submit to AAVSO WebObs** — link and brief steps after exporting the AAVSO Extended report
-- [ ] **README: troubleshooting** — common errors and fixes (no active window, plate solve missing, star outside frame, PSF rejected)
-- [ ] **README: outburst strategy summary** — when to switch comp/check labels and where to get a new chart (condense from `docs/domain-knowledge.md`)
-- [ ] **README: known limitations** — TG ≠ V (systematic offset for red stars), Seestar FOV constraint at nova peak
+- [x] **README: screenshot** of the dialog (use `docs/screenshot, 28Jun26, initial version.png` or a fresher one)
+- [x] **README: getting-started guide** — end-to-end from download to first submitted report (assumes no prior PixInsight scripting knowledge)
+- [x] **README: how to get the comparison-star CSV** from AAVSO VSP (URL, field-of-view setting, magnitude limit, download as CSV)
+- [x] **README: how to submit to AAVSO WebObs** — link and brief steps after exporting the AAVSO Extended report
+- [x] **README: troubleshooting** — common errors and fixes (no active window, plate solve missing, star outside frame, PSF rejected)
+- [x] **README: outburst strategy summary** — when to switch comp/check labels and where to get a new chart (condense from `docs/domain-knowledge.md`)
+- [x] **README: known limitations** — TG ≠ V (systematic offset for red stars), Seestar FOV constraint at nova peak
 
 ## Roadmap items not in scope for v1
 
+- [ ] **Full PixInsight XHTML documentation.** PI's native doc system requires a well-formed XHTML file at `<PI install>/doc/scripts/BeSchne/Photometry.html`. Users of GitHub-distributed scripts must copy it manually (no Update Repository). Wiring: `Dialog.browseScriptDocumentation("Photometry")` from the `?` help button. Contents should mirror the README getting-started guide, include screenshots, and document every dialog control formally. Defer until there is demand from other users or the script enters the PI Update Repository.
 - [ ] **UI redesign — tabbed / step-oriented layout.** The current single long dialog is hard to navigate and hides the verification image behind a modal window. Ideas to explore:
   - Tab strip across the top (or step list on the left): **Setup** → **Run** → **Timing** → **Report**
   - Remaining panel space used for the verification thumbnail (currently a separate window) and the report preview side-by-side
