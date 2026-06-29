@@ -8,6 +8,7 @@
                (the "Blaze Star").
 
 #include <pjsr/DataType.jsh>
+#include <pjsr/UndoFlag.jsh>
 #include <pjsr/astrometry/AstrometricMetadata.js>
 
 CoreApplication.ensureMinimumVersion( 1, 9, 4 );
@@ -17,7 +18,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -62,6 +63,14 @@ const PSF_BOX_HALF = 10;
 // Maximum allowed distance (pixels) between the projected position
 // and the DynamicPSF-fitted centroid before a star is rejected.
 const MAX_CENTROID_DRIFT_PX = 5.0;
+
+// --- Verification image ------------------------------------------
+// Circle radius drawn around each star in the original image's pixel space.
+const VERIFY_CIRCLE_RADIUS = 25;
+// Padding around the bounding box of all three stars (original pixels).
+const VERIFY_PADDING = 80;
+// Maximum side length of the thumbnail shown in the verification window.
+const VERIFY_MAX_SIDE = 1000;
 
 // --- Settings keys -----------------------------------------------
 const SETTINGS_NS          = "BeSchne/Photometry";
@@ -609,6 +618,139 @@ function detectForbiddenHistory( win ) {
       }
    }
    return found;
+}
+
+// ============================================================
+// Verification image
+// ============================================================
+
+// Creates a new ImageWindow showing an auto-stretched thumbnail of `win`
+// with coloured circles marking the target, comp, and check stars.
+// checkPix may be null if the check star PSF was rejected.
+// Called after PSF fitting succeeds, before writing the report.
+// Works on a private temporary copy — the original image is never modified.
+function createVerificationImage( win, targetPix, compStar, compPix, checkStar, checkPix ) {
+   var img  = win.mainView.image;
+   var imgW = img.width;
+   var imgH = img.height;
+
+   // Bounding box around all located stars, plus padding.
+   var xs = [ targetPix.x, compPix.x ];
+   var ys = [ targetPix.y, compPix.y ];
+   if ( checkPix ) { xs.push( checkPix.x ); ys.push( checkPix.y ); }
+
+   var x0 = Math.max( 0,    Math.floor( Math.min.apply( null, xs ) ) - VERIFY_PADDING );
+   var y0 = Math.max( 0,    Math.floor( Math.min.apply( null, ys ) ) - VERIFY_PADDING );
+   var x1 = Math.min( imgW, Math.ceil(  Math.max.apply( null, xs ) ) + VERIFY_PADDING );
+   var y1 = Math.min( imgH, Math.ceil(  Math.max.apply( null, ys ) ) + VERIFY_PADDING );
+
+   var thumbBmp = null;
+   var scale    = 1.0;
+   var tempW    = null;
+
+   try {
+      // Create a private copy of the active image so the original is never touched.
+      tempW = new ImageWindow( imgW, imgH, img.numberOfChannels,
+                               win.bitsPerSample, win.isFloatSample,
+                               img.isColor, "verify_tmp" );
+      tempW.mainView.beginProcess( UndoFlag_NoSwapFile );
+      tempW.mainView.image.assign( img );
+      tempW.mainView.endProcess();
+
+      // Crop to the region of interest.
+      var cropP          = new Crop;
+      cropP.leftMargin   = -x0;
+      cropP.topMargin    = -y0;
+      cropP.rightMargin  = -(imgW - x1);
+      cropP.bottomMargin = -(imgH - y1);
+      cropP.executeOn( tempW.mainView, false );
+
+      var cropW = tempW.mainView.image.width;
+      var cropH = tempW.mainView.image.height;
+
+      // Scale down if larger than VERIFY_MAX_SIDE.
+      if ( Math.max( cropW, cropH ) > VERIFY_MAX_SIDE ) {
+         var factor = Math.ceil( Math.max( cropW, cropH ) / VERIFY_MAX_SIDE );
+         var rs = new IntegerResample;
+         rs.zoomFactor = -factor;
+         rs.executeOn( tempW.mainView, false );
+         scale = 1.0 / factor;
+      }
+
+      // Auto-stretch pixel values on the temp copy via HistogramTransformation
+      // (Image.render() renders raw pixel values — real pixel change is needed,
+      // not just a display STF).
+      // Use whole-image median/stdDev (no channel selection) — avoids channel-index
+      // errors on images that may become single-channel after IntegerResample,
+      // and a single shadow/midtone point applied to all channels is fine for
+      // visual verification.
+      var mv    = tempW.mainView;
+      var med   = mv.image.median();
+      var sigma = mv.image.stdDev();
+      var c0    = ( isFinite( sigma ) && sigma > 0 )
+                    ? Math.range( med - 2.8 * sigma, 0.0, 1.0 )
+                    : 0;
+      var arg   = med - c0;
+      var mVal  = ( arg > 0 && arg < 1 ) ? Math.mtf( 0.25, arg ) : 0.25;
+      console.writeln( format( "Verification stretch: med=%.5f  sigma=%.5f  c0=%.5f  mVal=%.5f",
+                               med, sigma, c0, mVal ) );
+
+      // H format: [shadows, midtones, highlights, r0, r1] — 5 rows required.
+      var ht = new HistogramTransformation;
+      ht.H = [ [ c0, mVal, 1, 0, 1 ],   // R
+               [ c0, mVal, 1, 0, 1 ],   // G
+               [ c0, mVal, 1, 0, 1 ],   // B
+               [ 0,  0.5,  1, 0, 1 ],   // K (identity)
+               [ 0,  0.5,  1, 0, 1 ] ]; // Alpha (identity)
+      ht.executeOn( mv, false );
+
+      thumbBmp = mv.image.render();
+
+   } catch ( e ) {
+      console.warningln( "Verification image failed: " + String(e) );
+   } finally {
+      if ( tempW ) tempW.forceClose();
+   }
+
+   if ( !thumbBmp ) return;
+
+   // Draw annotation circles and labels on the bitmap.
+   var g = new Graphics( thumbBmp );
+   g.antialiasing     = true;
+   g.textAntialiasing = true;
+
+   var font = new Font( g.font );
+   font.pixelSize = 13;
+   g.font = font;
+
+   var r = Math.max( 8, Math.round( VERIFY_CIRCLE_RADIUS * scale ) );
+
+   function starAnnotation( pix, color, label ) {
+      var sx = Math.round( ( pix.x - x0 ) * scale );
+      var sy = Math.round( ( pix.y - y0 ) * scale );
+      g.pen = new Pen( color, 2 );
+      g.drawEllipse( sx - r, sy - r, sx + r, sy + r );
+      g.pen = new Pen( 0xffffffff, 1 );
+      g.drawText( sx + r + 5, sy + Math.round( font.pixelSize / 2 ), label );
+   }
+
+   starAnnotation( targetPix, 0xffff4444, TARGET.name );
+   starAnnotation( compPix,   0xff44ff44,
+      compStar.label  + "  " + format( "%.3f", compStar.magV  ) + " V" );
+   if ( checkPix )
+      starAnnotation( checkPix, 0xff44ffff,
+         checkStar.label + "  " + format( "%.3f", checkStar.magV ) + " V" );
+
+   g.end();
+
+   // Create and display the annotated ImageWindow in the foreground.
+   var outW = new ImageWindow( thumbBmp.width, thumbBmp.height, 3, 8, false, true, "Verification" );
+   outW.mainView.beginProcess( UndoFlag_NoSwapFile );
+   outW.mainView.image.blend( thumbBmp );
+   outW.mainView.endProcess();
+   outW.show();
+   outW.zoomToFit();
+   outW.bringToFront();
 }
 
 // ============================================================
@@ -1612,6 +1754,11 @@ class PhotometryDialog extends Dialog {
          console.writeln( "  " + TARGET.name + ":       " + psfLine( targetPSF ) );
          console.writeln( "  comp  " + compStar.label  + ":  " + psfLine( compPSF  ) );
          console.writeln( "  check " + checkStar.label + ":  " + psfLine( checkPSF ) );
+
+         // Verification image — annotated thumbnail showing which stars were measured
+         createVerificationImage( _window, targetPix, compStar, compPix,
+                                  checkReject ? null : checkStar,
+                                  checkReject ? null : checkPix );
 
          // Photometry math
          _instMag_T = psfInstrumentalMag( targetPSF );

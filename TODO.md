@@ -62,7 +62,7 @@
   - [x] Warn if `view.historyIndex > 0` when no forbidden HISTORY keyword found ("image modified this session — verify linearity")
   - [x] Supplement with green-channel median heuristic: linear master typically < 0.05; stretched image typically > 0.15
   - [x] Nudge user to save master stack before running (so HISTORY keywords are present) — static precondition line in the dialog
-- [ ] Annotated verification image (thumbnail with target + comp/check marked)
+- [x] Annotated verification image (thumbnail with target + comp/check marked)
 - [ ] Check-star gate: warn if (K−C) deviation exceeds threshold before writing
 - [x] Real `MERR`: Poisson + sky-background noise (PSF MAD residuals propagated via matched-filter formula)
 
@@ -90,6 +90,12 @@
 
 ## Roadmap items not in scope for v1
 
+- [ ] **UI redesign — tabbed / step-oriented layout.** The current single long dialog is hard to navigate and hides the verification image behind a modal window. Ideas to explore:
+  - Tab strip across the top (or step list on the left): **Setup** → **Run** → **Timing** → **Report**
+  - Remaining panel space used for the verification thumbnail (currently a separate window) and the report preview side-by-side
+  - Eliminates the modal-blocks-image-window problem: verification thumbnail lives inside the dialog
+  - Consider whether non-modal (`show()` + explicit "Close" state machine) is worth the added complexity vs. a well-structured modal with embedded panels
+- [ ] **Verification image stretch controls.** Currently the stretch is fixed at run time and cannot be changed without interacting with a separate image window (blocked by modal dialog). Add on-demand stretch options, e.g. radio buttons or a button group: **Auto** (current formula, `mtf(0.25, median)`) / **Boosted** (more aggressive: lower target background, e.g. `mtf(0.1, median)`) / **Linear** (no stretch, raw pixel values). If the thumbnail is embedded in the dialog (see UI redesign above), these controls sit alongside it; otherwise they re-render the separate verification window.
 - [ ] Ensemble photometry (`CNAME=ENSEMBLE`)
 - [ ] User-specifiable target star
 - [ ] TG→V transformation (`TRANS=YES`)

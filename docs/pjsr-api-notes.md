@@ -45,6 +45,91 @@ img.selectedChannel = prev;       // always restore
 
 Verified in `statisticalstretch.js` (bundled PI script). Calling `median()` without setting `selectedChannel` returns the statistic for whatever channel was last selected, not a combined value.
 
+## Drawing annotations on a bitmap (Graphics)
+
+**Use `Graphics`, not `VectorGraphics`.** `VectorGraphics` is a C++ class only available inside `DynamicPaint` callbacks. In scripts run via `Execute Script File…`, the drawing class is `Graphics` — same API, different name. Using `VectorGraphics` throws "VectorGraphics is not defined".
+
+
+Pattern verified in `AperturePhotometry.js` and `DrawAnnotationEngine.js`:
+
+```js
+// 1. Render image to bitmap (respects the view's current STF)
+var bmp = view.image.render();           // → Bitmap at full image resolution
+
+// 2. Scale bitmap
+var scaled = bmp.scaled( 0.5 );         // factor; also: bmp.scaledTo( w, h )
+
+// 3. Crop a region into a new bitmap using drawBitmapRect
+var thumb = new Bitmap( thumbW, thumbH );
+thumb.fill( 0xff000000 );               // fill with opaque black
+var gCrop = new Graphics( thumb );
+gCrop.drawBitmapRect( new Point( 0, 0 ), scaled, new Rect( x0, y0, x1, y1 ) );
+gCrop.end();
+
+// 4. Draw on the thumbnail
+var g = new Graphics( thumb );
+g.antialiasing     = true;
+g.textAntialiasing = true;
+
+// Pen color is 0xAARRGGBB (A=opacity, fully opaque = 0xff)
+g.pen = new Pen( 0xffff4444, 2 );       // red, 2px width
+g.drawEllipse( cx-r, cy-r, cx+r, cy+r );
+
+var font = new Font( g.font );          // copy current font
+font.pixelSize = 13;
+g.font = font;
+g.pen = new Pen( 0xffffffff, 1 );       // white text
+g.drawText( x, y, "label" );           // top-left of text at (x,y)
+
+g.end();
+
+// 5. Blend into a new ImageWindow
+var outW = new ImageWindow( thumbW, thumbH, 3, 8, false, true, "Verification" );
+outW.mainView.beginProcess( UndoFlag_NoSwapFile );
+outW.mainView.image.blend( thumb );
+outW.mainView.endProcess();
+outW.show();
+outW.zoomToFit();
+```
+
+## Auto-STF (temporary display stretch)
+
+From `GAME.js` `ApplyAutoSTF` — applies a non-destructive display stretch to a view and can be restored:
+
+```js
+// Save current STF
+var origSTF = view.stf;
+
+// Compute auto-STF parameters (linked RGB)
+var median = view.computeOrFetchProperty( "Median" );
+var mad    = view.computeOrFetchProperty( "MAD" );
+mad.mul( 1.4826 );
+var c0 = 0, mVal = 0;
+for ( var c = 0; c < 3; c++ ) {
+   if ( 1 + mad.at(c) != 1 )
+      c0 += median.at(c) + (-2.8) * mad.at(c);
+   mVal += median.at(c);
+}
+c0   = Math.range( c0 / 3, 0.0, 1.0 );
+mVal = Math.mtf( 0.25, mVal / 3 - c0 );  // Math.mtf is a PJSR extension
+
+var stf = new ScreenTransferFunction;
+stf.STF = [ [c0, 1, mVal, 0, 1],   // R: [c0, c1, m, r0, r1]
+            [c0, 1, mVal, 0, 1],   // G
+            [c0, 1, mVal, 0, 1],   // B
+            [0,  1, 0.5,  0, 1] ]; // L (unused for RGB)
+stf.executeOn( view );
+
+// ... render() here to get STF-stretched bitmap ...
+
+// Restore original STF
+var stfRestore = new ScreenTransferFunction;
+stfRestore.STF = origSTF;
+stfRestore.executeOn( view );
+```
+
+`ScreenTransferFunction` only modifies the display — it does **not** alter pixel values.
+
 ## DynamicPSF scripting
 
 Pattern:
