@@ -347,6 +347,27 @@ function psfInstrumentalMag( psf ) {
    return ( flux > 0 ) ? -2.5 * Math.log10( flux ) : null;
 }
 
+// 1-sigma magnitude error from Gaussian PSF fit residuals.
+// Treats psf.mad (per-pixel mean absolute deviation of fit residuals) as the
+// empirical pixel noise — capturing Poisson photon noise + sky background noise
+// + read noise in one number, without needing gain or read-noise FITS keywords.
+//
+// Derivation:
+//   σ_pix = mad / 0.6745          (MAD → 1-sigma for Gaussian noise)
+//   σ_A   = σ_pix × sqrt(2/(π·sx·sy))   (noise in amplitude from matched filter)
+//   SNR   = A / σ_A
+//   σ_mag = 2.5/ln(10) / SNR = 1.08574 / SNR
+//
+// Returns null if any PSF parameter is invalid.
+function psfMagError( psf ) {
+   if ( !psf || psf.A <= 0 || psf.sx <= 0 || psf.sy <= 0 || psf.mad <= 0 )
+      return null;
+   var sigmaPix = psf.mad / 0.6745;
+   var sigmaA   = sigmaPix * Math.sqrt( 2.0 / (Math.PI * psf.sx * psf.sy) );
+   var snr      = psf.A / sigmaA;
+   return snr > 0 ? 1.08574 / snr : null;
+}
+
 // Applies quality filters to one PSF result.
 // Returns null on pass, or a descriptive string on rejection.
 function checkPSFQuality( psf, projX, projY ) {
@@ -1495,20 +1516,39 @@ class PhotometryDialog extends Dialog {
 
          _tcrb_mag = COMP.magV + ( _instMag_T - _instMag_C );
 
-         if ( _instMag_K !== null ) {
-            var checkStd = COMP.magV + ( _instMag_K - _instMag_C );
-            _merr = Math.abs( checkStd - CHECK.magV );
+         // MERR: propagate per-star PSF noise in quadrature (Poisson + sky background)
+         var sigT = psfMagError( targetPSF );
+         var sigC = psfMagError( compPSF   );
+         var sigK = (_instMag_K !== null) ? psfMagError( checkPSF ) : null;
+         if ( sigT !== null && sigC !== null ) {
+            _merr = Math.sqrt( sigT * sigT + sigC * sigC );
          } else {
             _merr = 0.999;
-            console.warningln( "MERR set to 0.999 — check star unavailable." );
+            console.warningln( "MERR: PSF noise estimation failed — set to 0.999" );
          }
 
          console.writeln( "Photometry:" );
          console.writeln( format( "  %ls = %.3f TG   MERR = %.3f  (comp %ls, V = %.3f)",
                                   TARGET.name, _tcrb_mag, _merr, COMP.label, COMP.magV ) );
-         console.writeln( format( "  inst T = %.4f   inst C = %.4f   inst K = %ls",
-                                  _instMag_T, _instMag_C,
-                                  (_instMag_K !== null) ? format("%.4f", _instMag_K) : "n/a" ) );
+         console.writeln( "  inst T = " + format( "%.4f", _instMag_T ) +
+                          "  err=" + format( "%.3f", sigT || 0 ) +
+                          "   inst C = " + format( "%.4f", _instMag_C ) +
+                          "  err=" + format( "%.3f", sigC || 0 ) +
+                          "   inst K = " + ((_instMag_K !== null) ? format( "%.4f", _instMag_K ) : "n/a") +
+                          ((sigK !== null) ? "  err=" + format( "%.3f", sigK ) : "") );
+
+         // Check-star quality gate — independent of MERR
+         if ( _instMag_K !== null ) {
+            var checkStd = COMP.magV + ( _instMag_K - _instMag_C );
+            var checkDev = Math.abs( checkStd - CHECK.magV );
+            console.writeln( "  Check star: derived " + format( "%.3f", checkStd ) +
+                             " vs catalogue V=" + format( "%.3f", CHECK.magV ) +
+                             " -> deviation " + format( "%.3f", checkDev ) + " mag" );
+            if ( checkDev > 3.0 * _merr )
+               console.warningln( "  Check star deviation (" + format( "%.3f", checkDev ) +
+                                  ") is > 3x MERR (" + format( "%.3f", _merr ) +
+                                  ") -- possible systematic error." );
+         }
 
          // Update results display
          self.magLbl.text  = format( "%.3f", _tcrb_mag );

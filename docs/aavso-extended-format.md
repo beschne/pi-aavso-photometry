@@ -26,7 +26,7 @@ Authoritative spec: <https://www.aavso.org/aavso-extended-file-format> — verif
 | `NAME` | `T CRB` | |
 | `DATE` | computed JD | Mid-exposure JD — see `time-handling.md` |
 | `MAG` | computed | T CrB standardised magnitude |
-| `MERR` | computed | Magnitude error |
+| `MERR` | computed | 1-sigma magnitude error — see `domain-knowledge.md` for formula |
 | `FILT` | `TG` | Green channel of OSC sensor |
 | `TRANS` | `NO` | No transformation to a standard system |
 | `MTYPE` | `STD` | Standardised — **not** `DIF` |

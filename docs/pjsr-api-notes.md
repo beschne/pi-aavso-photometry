@@ -164,6 +164,24 @@ var frames = Math.round( maxTot / parseFloat( String( frameExp ) ) );
 
 **`PixInsight:ProcessingHistory` is NOT loaded into the in-memory view.** It exists in the XISF file on disk (accessible via Python/XML parsing) but `view.propertyValue("PixInsight:ProcessingHistory")` returns `null`. Do not rely on it from PJSR.
 
+## Non-ASCII characters in `format()` format strings
+
+**Do not embed non-ASCII (non-Latin-1) characters directly inside a `format()` format string.** PJSR's `format()` is a C printf wrapper; multi-byte UTF-8 characters in the format string itself (not in string arguments) can cause it to misinterpret argument counts or types, resulting in an out-of-memory crash or silent wrong output.
+
+- **Safe:** Latin-1 characters (codepoints ≤ 255) such as `°` (U+00B0) work in format strings.
+- **Unsafe:** Characters with codepoints > 255 — for example `σ` (U+03C3), `→` (U+2192), `×` (U+00D7 is actually Latin-1 so fine, but test it) — must not appear inside the format string passed to `format()`.
+- **Fix:** build the string with concatenation, using `format()` only for the numeric parts:
+
+```js
+// Wrong — "σ" in format string causes OOM:
+console.writeln( format( "err=%.3f  σ=%.3f", a, b ) );
+
+// Correct — non-ASCII only in plain JS string concatenation:
+console.writeln( "err=" + format( "%.3f", a ) + "  sig=" + format( "%.3f", b ) );
+```
+
+Non-ASCII characters are safe in plain JS string literals that are not passed to `format()` — e.g., `Label.text = "Moon: 45°"` is fine.
+
 ## Settings persistence
 
 Requires `#include <pjsr/DataType.jsh>` — the `DataType_*` constants are not automatically in scope.

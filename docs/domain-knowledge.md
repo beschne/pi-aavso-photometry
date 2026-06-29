@@ -70,6 +70,32 @@ The master is a normalised float in [0,1] — an absolute pixel threshold is mea
 
 Caveat: true saturation is a subframe property; on the master this is only a heuristic — keep it conservative.
 
+## MERR — photometric magnitude error
+
+`MERR` is computed from the DynamicPSF fit residuals, capturing Poisson photon noise + sky background noise + read noise without needing separate gain or read-noise FITS keywords.
+
+**Per-star formula** (`psfMagError()` in the script):
+
+`psf.mad` is the mean absolute deviation of the Gaussian fit residuals across the pixels in the fitting box (returned by DynamicPSF). $A$, $\sigma_x$, $\sigma_y$ are the fitted amplitude and Gaussian widths.
+
+$$\sigma_\text{pix} = \frac{\text{MAD}}{0.6745}$$
+
+For Gaussian noise, $\text{MAD} = 0.6745\,\sigma$, so this recovers the per-pixel noise standard deviation.
+
+$$\sigma_A = \sigma_\text{pix} \sqrt{\frac{2}{\pi \, \sigma_x \sigma_y}}$$
+
+Noise in the fitted amplitude from an optimal matched filter applied to a 2D Gaussian PSF.
+
+$$\text{SNR} = \frac{A}{\sigma_A}, \qquad \sigma_\text{mag} = \frac{2.5}{\ln 10} \cdot \frac{1}{\text{SNR}} \approx \frac{1.08574}{\text{SNR}}$$
+
+**Combined MERR** — target and comp errors added in quadrature:
+
+$$\text{MERR} = \sqrt{\sigma_T^2 + \sigma_C^2}$$
+
+**Check-star quality gate (separate from MERR):** the check star's derived magnitude is standardised from the comp and compared to its catalogue V value. If the deviation exceeds $3 \times \text{MERR}$, a warning is printed to the console. This catches systematic errors (wrong star, blending, atmospheric gradient) that the noise model cannot detect.
+
+**Typical values:** for a 20–25 frame × 30 s Seestar stack of a ~10 mag target, MERR is typically 0.003–0.010 mag.
+
 ## Airmass computation (Kasten & Young 1989)
 
 Pure JavaScript, no external dependency. Input: mid-exposure JD (UTC), observer site lat/long, target J2000 RA/Dec.
@@ -79,16 +105,16 @@ Pure JavaScript, no external dependency. Input: mid-exposure JD (UTC), observer 
 1. **JD → GMST** (Meeus, *Astronomical Algorithms*, ch. 12)
 2. **LST** = GMST + longitude_east (both in degrees)
    **Hour angle** H = LST − RA (degrees)
-3. **True altitude h:**
-   ```
-   sin h = sin φ · sin δ + cos φ · cos δ · cos H
-   ```
-4. **Airmass:**
-   ```
-   X = 1 / ( sin(h) + 0.50572 · (h_deg + 6.07995)^(−1.6364) )
-   ```
-   where `h_deg` is altitude in degrees. Valid down to the horizon.
-   Do **not** use plain `sec z = 1 / sin h` — it diverges near the horizon.
+3. **True altitude** $h$:
+
+$$\sin h = \sin\varphi\,\sin\delta + \cos\varphi\,\cos\delta\,\cos H$$
+
+4. **Airmass** (Kasten & Young 1989):
+
+$$X = \frac{1}{\sin h + 0.50572\,(h_\text{deg} + 6.07995)^{-1.6364}}$$
+
+   where $h_\text{deg}$ is altitude in degrees. Valid down to the horizon.
+   Do **not** use plain $X = 1/\sin h$ — it diverges near the horizon.
 
 - Use J2000 RA/Dec — precession/refraction are negligible at the reported precision.
 - If computed altitude ≤ 0°, the star is not observable → emit an error, not a nonsensical airmass value.

@@ -107,7 +107,7 @@ These are enforced by the dialog's notice text and must be respected in all code
 4. **Target location:** T CrB catalog position hardcoded → project to pixels via the plate solve.
 5. **Comparison stars:** read from a user-chosen CSV (path persisted via `Settings`); project each in-frame star to pixels.
 6. **Measurement:** PSF fit via native **DynamicPSF**; read amplitude / background / sigma / flux. Apply quality filters (too faint, saturated/clipped, centroid drift) — see `docs/domain-knowledge.md`.
-7. **Photometry (current scope):** single comp star + single check star. Derive T CrB magnitude from comp's known V mag and the instrumental difference; check star gives an independent error estimate.
+7. **Photometry (current scope):** single comp star + single check star. Derive T CrB magnitude from comp's known V mag and the instrumental difference. `MERR` is computed from PSF fit residuals (see `docs/domain-knowledge.md`). The check star is a separate quality gate — its derived magnitude is compared to catalogue V; a >3×MERR deviation triggers a console warning.
 8. **Time confirmation (UI):** time fields (Start / End / Mid) are embedded in the unified `PhotometryDialog` — see `docs/time-handling.md` and **Dialog layout** below. Confirmed mid-time JD drives the AAVSO `DATE` field and airmass.
 9. **Output:** user clicks "Create Report" to generate text (human-readable by default; AAVSO Extended CSV on demand); "Export…" opens a `SaveFileDialog` and writes the file immediately — see `docs/aavso-extended-format.md`.
 
@@ -130,11 +130,11 @@ Full field spec and comp/check star table: `docs/aavso-extended-format.md`.
 **File header:**
 ```
 #TYPE=EXTENDED
-#OBSCODE=AGO
+#OBSCODE=BSLA
 #SOFTWARE=<script name + version>
 #DELIM=,
 #DATE=JD
-#OBSTYPE=DSLR
+#OBSTYPE=CCD
 ```
 
 **Per-observation fields:**
@@ -186,7 +186,7 @@ Keep code structured so these are additions, not rewrites. In priority order:
 - **(High priority — QA, low effort)**
   - **Annotated verification image.** Thumbnail showing target + comp/check stars before the report is written. Catches the most common failure (wrong star) at a glance.
   - **Check-star gate.** Standardise the check star's magnitude from the comp; if (K−C) deviation exceeds a tunable threshold, warn before writing.
-  - **Real `MERR`.** Compute Poisson + sky-background noise rather than only scatter across comp stars.
+  - ~~**Real `MERR`.**~~ Done: PSF MAD residuals propagated via matched-filter formula; target + comp combined in quadrature. Check-star deviation is now a separate quality gate logged to the console.
 
 - **Ensemble photometry.** Multiple comp stars → `CNAME=ENSEMBLE`, `CMAG=na`; list used stars in `NOTES`.
 - **User-specifiable target star.** Currently T CrB is hardcoded; isolate the target definition for easy extension.

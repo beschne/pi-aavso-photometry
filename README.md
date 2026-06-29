@@ -98,7 +98,6 @@ TODO.md                      Build checklist and roadmap
 - Selectable comp/check stars in the dialog (needed for outburst — stars 84, 79, …)
 - Annotated verification image (thumbnail with target + comp/check marked)
 - Check-star gate (warn if comp/check deviation exceeds threshold)
-- Real MERR (Poisson + sky-background noise)
 - Ensemble photometry
 - TG→V transformation
 

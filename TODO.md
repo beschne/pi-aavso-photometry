@@ -64,7 +64,7 @@
   - [ ] Nudge user to save master stack before running (so HISTORY keywords are present)
 - [ ] Annotated verification image (thumbnail with target + comp/check marked)
 - [ ] Check-star gate: warn if (K−C) deviation exceeds threshold before writing
-- [ ] Real `MERR`: Poisson + sky-background noise
+- [x] Real `MERR`: Poisson + sky-background noise (PSF MAD residuals propagated via matched-filter formula)
 - [ ] Ensemble photometry (`CNAME=ENSEMBLE`)
 - [ ] User-specifiable target star
 - [ ] TG→V transformation (`TRANS=YES`)
