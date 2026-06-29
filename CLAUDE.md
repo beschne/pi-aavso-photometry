@@ -111,6 +111,30 @@ These are enforced by the dialog's notice text and must be respected in all code
 8. **Time confirmation (UI):** time fields (Start / End / Mid) are embedded in the unified `PhotometryDialog` — see `docs/time-handling.md` and **Dialog layout** below. Confirmed mid-time JD drives the AAVSO `DATE` field and airmass.
 9. **Output:** user clicks "Create Report" to generate text (human-readable by default; AAVSO Extended CSV on demand); "Export…" opens a `SaveFileDialog` and writes the file immediately — see `docs/aavso-extended-format.md`.
 
+## File organisation — when to split
+
+The script is intentionally a **single file** (`aavso-photometry.js`). Do not split it
+until there is a concrete reason (a second script that reuses a module, or the file
+growing past ~2 500 lines where navigation becomes painful).
+
+PJSR supports `#include "subfile.js"` (preprocessed before V8 sees the code), so
+splitting is technically straightforward and is how PixInsight's own bundled scripts
+work. If splitting is ever warranted, the natural seams are:
+
+| Candidate file | Contents |
+|----------------|----------|
+| `lib/csv-parser.js` | RFC 4180 parser + `loadComparisonStars()` |
+| `lib/astrometry.js` | WCS projection, `projectToPixel()` |
+| `lib/psf.js` | `fitPSF()`, `psfInstrumentalMag()`, `psfMagError()`, `checkPSFQuality()` |
+| `lib/photometry.js` | Airmass, time/JD math, `readSiteCoords()` |
+| `lib/report.js` | `generateReport()` — human-readable + AAVSO Extended formats |
+| `aavso-photometry.js` | Dialog + `main()` only |
+
+The `lib/` files would be reusable across future `pi-…` scripts. That is the trigger
+worth waiting for: when a second script needs the CSV parser or astrometry helper,
+split then. Until that point the single-file approach costs nothing and avoids
+multi-file download friction for users.
+
 ## Domain knowledge — key constants
 
 Full details: `docs/domain-knowledge.md`.
