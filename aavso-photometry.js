@@ -738,6 +738,10 @@ class PhotometryDialog extends Dialog {
       this.warningLbl.useRichText = true;
       this.warningLbl.visible     = false;
 
+      this.linearityLbl = new Label( this );
+      this.linearityLbl.useRichText = true;
+      this.linearityLbl.visible     = false;
+
       // ============================================================
       // Input — active image + comparison CSV
       // ============================================================
@@ -1362,7 +1366,8 @@ class PhotometryDialog extends Dialog {
       this.sizer.add( precon1          );
       this.sizer.add( precon2          );
       this.sizer.add( precon3          );
-      this.sizer.add( this.warningLbl  );
+      this.sizer.add( this.warningLbl   );
+      this.sizer.add( this.linearityLbl );
 
       // Input
       this.sizer.add( hSep()    );
@@ -1430,6 +1435,46 @@ class PhotometryDialog extends Dialog {
             self.warningLbl.visible = true;
          } else {
             self.warningLbl.visible = false;
+         }
+
+         // Heuristic linearity checks: green-channel median + historyIndex.
+         // Supplementary signals only — never block; shown in addition to HISTORY warnings.
+         var img = _window.mainView.image;
+         var prevChannel = img.selectedChannel;
+         img.selectedChannel = 1;   // green channel
+         var greenMedian = img.median();
+         img.selectedChannel = prevChannel;
+         console.writeln( "Green channel median: " + format( "%.4f", greenMedian ) );
+
+         var histIdx = _window.mainView.historyIndex;
+         var linearityMsgs = [];
+
+         if ( greenMedian > 0.15 ) {
+            linearityMsgs.push(
+               "<font color='#cc4400'>⚠  Green median " + format( "%.4f", greenMedian ) +
+               " — image is likely stretched. Photometry will be unreliable.</font>"
+            );
+         } else if ( greenMedian >= 0.05 ) {
+            linearityMsgs.push(
+               "<font color='#997700'>⚠  Green median " + format( "%.4f", greenMedian ) +
+               " is in the ambiguous range — verify the stack is unstretched.</font>"
+            );
+         }
+
+         if ( histIdx > 0 && forbidden.length === 0 ) {
+            linearityMsgs.push(
+               "<font color='#997700'>⚠  Image has " + histIdx + " unsaved edit" +
+               ( histIdx === 1 ? "" : "s" ) +
+               " this session — process history not recorded in FITS keywords. " +
+               "Save to disk for reliable detection.</font>"
+            );
+         }
+
+         if ( linearityMsgs.length > 0 ) {
+            self.linearityLbl.text    = "<b>" + linearityMsgs.join( "<br/>" ) + "</b>";
+            self.linearityLbl.visible = true;
+         } else {
+            self.linearityLbl.visible = false;
          }
 
          // Populate observer site fields from FITS keywords (only if the field is

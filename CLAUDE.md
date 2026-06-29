@@ -94,10 +94,11 @@ These are enforced by the dialog's notice text and must be respected in all code
 
 **Known blind spot — unsaved in-memory stacks:** PixInsight only writes `HISTORY` FITS keywords when a file is saved to disk (and only if the "Add FITS keywords" option is enabled in preferences). A stretch or deconvolution applied to an in-memory `ImageIntegration` result in the current session, without an intermediate save, will **not** appear in `win.keywords` and will **not** be detected.
 
-**Improving robustness:** There is no public PJSR API to enumerate in-session undo history entries by name (`View.historyIndex` tells you *how many* steps exist but not *which processes* they are). Options to improve coverage in future:
-- Prompt the user to confirm linearity if `view.historyIndex > 0` (something was done this session, identity unknown).
-- Check image statistics as a heuristic: a linear master stack has a very low green-channel median (typically < 0.05 in [0,1]); a stretched image is usually > 0.15. Implement as a supplementary signal, not a hard gate.
-- Encourage saving the master stack before running photometry, so `HISTORY` keywords are present.
+**Supplementary heuristics (run on "Run Photometry", shown in `linearityLbl`):**
+- **Green-channel median:** `img.selectedChannel = 1; img.median()` — linear master typically < 0.05; ambiguous 0.05–0.15 (yellow warning); likely stretched > 0.15 (orange warning). Supplementary signal only — never blocks.
+- **`historyIndex` check:** if `win.mainView.historyIndex > 0` and no forbidden HISTORY keywords found, warn that the image has unsaved edits this session whose process names are unknown. Encourages saving the stack so HISTORY keywords are present.
+
+`linearityLbl` (yellow/orange) is distinct from `warningLbl` (red) which shows confirmed HISTORY keyword hits. Both may be visible simultaneously.
 
 ## Architecture
 

@@ -31,6 +31,20 @@ var kws = window.keywords;  // Array of FITSKeyword
 
 Values are always strings. Parse floats with `parseFloat()`, integers with `parseInt()`. Trim whitespace and surrounding quotes.
 
+## Per-channel image statistics
+
+`Image.median()` (and `MAD()`, `mean()`, etc.) operates on the **currently selected channel**. To get a single-channel statistic, set `selectedChannel` first and restore it afterwards:
+
+```js
+var img  = view.image;
+var prev = img.selectedChannel;
+img.selectedChannel = 1;          // 0=R, 1=G, 2=B for an RGB image
+var greenMedian = img.median();
+img.selectedChannel = prev;       // always restore
+```
+
+Verified in `statisticalstretch.js` (bundled PI script). Calling `median()` without setting `selectedChannel` returns the statistic for whatever channel was last selected, not a combined value.
+
 ## DynamicPSF scripting
 
 Pattern:
