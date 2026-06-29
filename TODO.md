@@ -78,6 +78,11 @@
 - [ ] **No unintended network access** — confirm the script makes no outbound connections (PJSR can call `NetworkTransfer`; verify it is not used)
 - [ ] **Settings namespace isolation** — confirm `BeSchne/Photometry/…` keys cannot read or overwrite keys from other PixInsight scripts
 
+### PixInsight script documentation (needed before 1.0.0)
+- [ ] **`#feature-info` text** — the one-paragraph description shown in `Script > Feature Scripts` should be complete and accurate (currently minimal)
+- [ ] **In-dialog tooltips** — add `toolTip` text to every control (CSV path, Comp/Check combos, time fields, lat/lon/elev, mid-time radio buttons, report format radio buttons) so hovering explains each field
+- [ ] **Process Console banner** — verify the startup banner (script name, version, brief purpose) is clear enough for a new user reading the console
+
 ### Documentation (needed before 1.0.0)
 - [ ] **README: screenshot** of the dialog (use `docs/screenshot, 28Jun26, initial version.png` or a fresher one)
 - [ ] **README: getting-started guide** — end-to-end from download to first submitted report (assumes no prior PixInsight scripting knowledge)
