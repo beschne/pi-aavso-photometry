@@ -24,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
