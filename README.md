@@ -114,7 +114,7 @@ Verify the **Mid JD**, **airmass**, and **moon** readouts look reasonable.
 
 **Step 5 — Verification**
 
-Inspect the annotated thumbnail: target (green circle), comp stars (blue), check (yellow).
+Inspect the annotated thumbnail: target (red circle), comp stars (green), check (cyan).
 Confirm the circles land on the intended stars. Use the stretch buttons to bring out
 faint stars if needed.
 

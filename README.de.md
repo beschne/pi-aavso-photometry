@@ -115,7 +115,7 @@ und berechnet den Belichtungsmittelpunkt automatisch als `(Start + Ende) / 2`.
 
 **Schritt 5 — Verifikation**
 
-Annotiertes Thumbnail prüfen: Ziel (grüner Kreis), Comp-Sterne (blau), Check (gelb).
+Annotiertes Thumbnail prüfen: Ziel (roter Kreis), Comp-Sterne (grün), Check (cyan).
 Bestätigen, dass die Kreise auf den richtigen Sternen liegen. Die Stretch-Schaltflächen
 verwenden, um schwache Sterne besser sichtbar zu machen.
 
