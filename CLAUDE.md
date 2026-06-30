@@ -63,9 +63,9 @@ development. That mechanism is only for distributing the finished script to othe
 
 `docs/Photometry.html` is the native PixInsight help page, opened by `Dialog.browseScriptDocumentation("Photometry")` (the `?` button). It must be installed manually into the PI doc tree; there is no Update Repository mechanism for GitHub-distributed scripts.
 
-**Install path:** `<PI install>/doc/scripts/BeSchne/Photometry/Photometry.html`
+**Install path:** `<PI install>/doc/scripts/Photometry/Photometry.html`
 
-**Images** go in `<PI install>/doc/scripts/BeSchne/Photometry/images/`, renamed as follows:
+**Images** go in `<PI install>/doc/scripts/Photometry/images/`, renamed as follows:
 
 | Source (`screenshots/`) | Install as (`images/`) |
 |-------------------------|------------------------|
@@ -77,12 +77,12 @@ development. That mechanism is only for distributing the finished script to othe
 | `screenshot, v1.2.0, (6) report, human readable.png` | `report-human.png` |
 | `screenshot, v1.2.0, (6) report, aavso.png` | `report-aavso.png` |
 
-**pidoc path depth:** the HTML references `../../../pidoc/` for CSS/JS (three levels up from `Photometry/` to `doc/`). Do not change this when editing the file.
+**pidoc path depth:** the HTML references `../../pidoc/` for CSS/JS (two levels up from `Photometry/` to `doc/`). Do not change this when editing the file.
 
 **Testing without installing:** symlink the file into the PI doc tree so edits are picked up live:
 ```bash
-mkdir -p /Applications/PixInsight/doc/scripts/BeSchne/Photometry
-ln -s "$(pwd)/docs/Photometry.html" /Applications/PixInsight/doc/scripts/BeSchne/Photometry/Photometry.html
+mkdir -p /Applications/PixInsight/doc/scripts/Photometry
+ln -s "$(pwd)/docs/Photometry.html" /Applications/PixInsight/doc/scripts/Photometry/Photometry.html
 ```
 Copy or symlink the `images/` folder alongside it (see table above for filenames). Then `Dialog.browseScriptDocumentation("Photometry")` opens the live file. Delete the symlink when done.
 

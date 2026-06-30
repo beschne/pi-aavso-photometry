@@ -229,7 +229,7 @@ Das Skript wird mit einer nativen PixInsight-Hilfeseite ausgeliefert, die über 
 
 Installation:
 
-1. Ordner erstellen: `<PI-Installation>/doc/scripts/BeSchne/Photometry/`
+1. Ordner erstellen: `<PI-Installation>/doc/scripts/Photometry/`
 2. `docs/Photometry.html` in diesen Ordner kopieren
 3. Darin einen Unterordner `images/` erstellen und die Screenshots aus `screenshots/`
    mit folgenden Namen hineinkopieren:

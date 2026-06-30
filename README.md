@@ -227,7 +227,7 @@ in the dialog (or `Script > Feature Scripts > ?`).
 
 To install it:
 
-1. Create the folder `<PI install>/doc/scripts/BeSchne/Photometry/`
+1. Create the folder `<PI install>/doc/scripts/Photometry/`
 2. Copy `docs/Photometry.html` into that folder
 3. Inside it, create an `images/` subfolder and copy the screenshots from `screenshots/`
    with the following names:

@@ -24,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -1832,12 +1832,15 @@ class PhotometryDialog extends Dialog {
       this.helpBtn.flat    = true;
       this.helpBtn.toolTip = "Open script documentation";
       this.helpBtn.onClick = function() {
-         if ( !Dialog.browseScriptDocumentation( "Photometry" ) )
+         var docPath = CoreApplication.docDirPath + "/scripts/Photometry/Photometry.html";
+         if ( File.exists( docPath ) )
+            Dialog.openBrowser( "file://" + docPath, TITLE );
+         else
             new MessageBox(
                "<p><b>AAVSO Photometry v" + VERSION + "</b></p>" +
                "<p>Documentation not found in the PixInsight doc tree.</p>" +
                "<p>Install <tt>docs/Photometry.html</tt> into<br/>" +
-               "<tt>&lt;PI&gt;/doc/scripts/BeSchne/Photometry/</tt><br/>" +
+               "<tt>&lt;PI&gt;/doc/scripts/Photometry/</tt><br/>" +
                "or visit the online guide:</p>" +
                "<p><a href='https://github.com/beschne/pi-aavso-photometry'>" +
                "github.com/beschne/pi-aavso-photometry</a></p>",
