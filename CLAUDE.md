@@ -69,13 +69,13 @@ development. That mechanism is only for distributing the finished script to othe
 
 | Source (`screenshots/`) | Install as (`images/`) |
 |-------------------------|------------------------|
-| `screenshot, v1.2.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.3.0, (1) setup.png` | `setup.png` |
 | `screenshot, v1.2.0, (2) comp stars.png` | `comp-stars.png` |
-| `screenshot, v1.2.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v1.3.0, (3) photometry.png` | `photometry.png` |
 | `screenshot, v1.2.0, (4) mid-time.png` | `mid-time.png` |
 | `screenshot, v1.2.0, (5) verification.png` | `verification.png` |
-| `screenshot, v1.2.0, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v1.2.0, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v1.3.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.3.0, (6) report, aavso.png` | `report-aavso.png` |
 
 **pidoc path depth:** the HTML references `../../pidoc/` for CSS/JS (two levels up from `Photometry/` to `doc/`). Do not change this when editing the file.
 
@@ -92,6 +92,7 @@ These are enforced by the dialog's notice text and must be respected in all code
 
 | Condition | Status | Reason |
 |-----------|--------|--------|
+| Debayered OSC (one-shot colour) RGB, 3-channel | **Required** | TG and TB are extracted from the green (index 1) and blue (index 2) channels of the Bayer-demosaiced RGB; a monochrome image or single-channel extract has 1 channel and is rejected at startup |
 | Linear (unstretched) stack | **Required** | PSF flux is non-linear on a stretched image — photometry is meaningless |
 | Plate-solved (ImageSolver) | **Required** | Coordinate projection depends on the WCS solution |
 | Any stretch applied | **Incompatible** | Breaks PSF linearity |
@@ -132,12 +133,12 @@ These are enforced by the dialog's notice text and must be respected in all code
 ## Architecture
 
 1. **Input:** `ImageWindow.activeWindow` — plate-solved, debayered OSC RGB master light. Abort clearly if unsuitable.
-2. **Channel:** green only (PixInsight R,G,B → index 1). Reported as AAVSO **TG** band.
+2. **Channels:** green (PixInsight R,G,B → index 1) for **TG** band; blue (index 2) for **TB** band. Both are measured per run via separate `fitPSF(window, stars, channel)` calls. The `channel` parameter is the only difference between the two passes.
 3. **Astrometry:** PixInsight's own WCS/astrometric-metadata library (`ImageSolver` / `AnnotateImage`). Do **not** hand-roll gnomonic projection.
 4. **Target location:** T CrB catalog position hardcoded → project to pixels via the plate solve.
-5. **Comparison stars:** read from a user-chosen CSV (path persisted via `Settings`); project each in-frame star to pixels.
+5. **Comparison stars:** read from a user-chosen CSV (path persisted via `Settings`); project each in-frame star to pixels. Both V-band and B-band rows are loaded; each star object carries `magV`/`magB` (null when absent).
 6. **Measurement:** PSF fit via native **DynamicPSF**; read amplitude / background / sigma / flux. Apply quality filters (too faint, saturated/clipped, centroid drift) — see `docs/domain-knowledge.md`.
-7. **Photometry (current scope):** ensemble comp stars (N selectable in Comp Stars step) + single check star. Zero-point ZP = mean(magV_i − instMag_i); mag(T) = ZP + instMag_T. `MERR` = √(σ_ZP² + σ_T²) where σ_ZP = std(ZP_i)/√N for N≥2 (see `docs/domain-knowledge.md`). The check star is a separate quality gate — its derived magnitude is compared to catalogue V; a >3×MERR deviation triggers a warning.
+7. **Photometry (current scope):** ensemble comp stars (N selectable in Comp Stars step) + single check star. For each band independently: ZP = mean(magBand_i − instMag_i); mag(T) = ZP + instMag_T. `MERR` = √(σ_ZP² + σ_T²) where σ_ZP = std(ZP_i)/√N for N≥2 (see `docs/domain-knowledge.md`). The check star gate applies to TG (compares derived mag against catalogue V; >3×MERR → orange warning).
 8. **Time confirmation (UI):** time fields (Start / End / Mid) are in the Mid-time step of `PhotometryDialog` — see `docs/time-handling.md` and **Dialog layout** below. Confirmed mid-time JD drives the AAVSO `DATE` field and airmass.
 9. **Output:** navigating to the Report step auto-generates the report (human-readable by default; AAVSO Extended CSV on demand); "Export…" opens a `SaveFileDialog` and writes the file immediately — see `docs/aavso-extended-format.md`.
 
@@ -171,8 +172,10 @@ Full details: `docs/domain-knowledge.md`.
 
 - **T CrB position (hardcoded):** RA = 239.8757°, Dec = +25.9202° (15h59m30.2s, +25°55′13″)
 - **Observer site:** read from FITS keywords at run time (see below); **no hardcoded fallback**. `const SITE` has been removed.
-- **TG band:** green OSC channel; runs ~0.1–0.3 mag brighter than V for red stars. **Never relabel TG as V.**
-- **Comparison CSV:** filter `Band == "V"`; prefer AUID over label in output; exclude blended stars (label 102 on chart X42597QE). CSV uses RFC 4180 quoting — use a proper parser, not `split(",")`. Fail loudly on column mismatch.
+- **TG band:** green OSC channel; calibrated against V-band comp star magnitudes; runs ~0.1–0.3 mag brighter than V for red stars. **Never relabel TG as V.**
+- **TB band:** blue OSC channel; calibrated against B-band comp star magnitudes from the same CSV. B-band is most sensitive to the hot WD/disk component because the M3 III giant contributes minimally at B wavelengths (B−V ≈ +1.6 for M giants). TB is the most diagnostic band for early outburst detection. The colour index TB−TG approximates B−V; a sustained blueward shift is an early warning of increased accretion.
+- **TR (red channel): intentionally not implemented.** Rc flux at quiescence is overwhelmingly M-giant photospheric emission; the WD/disk contribution is a small fraction, making TR the least sensitive band for detecting accretion changes or nova onset. The Rc→TR colour correction for M stars is also large without transformation coefficients.
+- **Comparison CSV:** load both `Band == "V"` and `Band == "B"` rows; attach `magB`/`errorB` to each star object (null when absent). Prefer AUID over label in output; exclude blended stars (label 102 on chart X42597QE). CSV uses RFC 4180 quoting — use a proper parser, not `split(",")`. Fail loudly on column mismatch.
 - **DATE-OBS caveat:** ImageIntegration writes the midpoint of sub *start* times, ignoring exposure duration — unreliable. The acquisition-time dialog (see `docs/time-handling.md`) is the fix.
 - **Airmass:** Kasten & Young (1989) formula in pure JS — see `docs/domain-knowledge.md`. If lat or lon is absent, `AMASS=na` is written; this is valid per the AAVSO Extended File Format spec and is not treated as an error.
 - **Default comp/check:** the two stars whose V magnitude is closest to `TARGET.magQuiescence` (10.0 V for T CrB). Proximity minimises differential extinction and PSF fitting error contribution. Display order in the combos is brightest→faintest for easy browsing. Not persisted between sessions.
@@ -195,8 +198,8 @@ Full field spec and comp/check star table: `docs/aavso-extended-format.md`.
 **Per-observation fields:**
 `NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES`
 
-Key choices: `FILT=TG`, `TRANS=NO`, `MTYPE=STD` (not `DIF`), `OBSTYPE=CCD` (Seestar is a dedicated astronomy camera, not a consumer DSLR), `CHART=X42597QE`, `GROUP=na`.
-`CMAG`/`KMAG` are **instrumental** magnitudes (can be negative). Output via `SaveFileDialog` on every run (not persisted).
+Key choices: `TRANS=NO`, `MTYPE=STD` (not `DIF`), `OBSTYPE=CCD` (Seestar is a dedicated astronomy camera, not a consumer DSLR), `CHART=X42597QE`, `GROUP=na`.
+The report contains **one observation line per measured band**: `FILT=TG` always; `FILT=TB` when the blue-channel PSF converges and at least one comp star has a B-band catalogue magnitude (all stars in a standard AAVSO VSP export do). `CMAG`/`KMAG` are **instrumental** magnitudes from the same channel as the observation line (can be negative). Output via `SaveFileDialog` on every run (not persisted).
 
 Default comp/check: the two stars closest in V magnitude to `TARGET.magQuiescence` (10.0 V). For chart X42597QE at quiescence this yields label `98` (9.809 V, Δ=0.19) and `106` (10.554 V, Δ=0.55).
 
@@ -225,15 +228,15 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). T
 - Step 5 (Report): requires `_photDone && !isNaN(self.midJD)`.
 
 **Auto-triggers in `activateStep`:**
-- Entering step 1 → runs `runDiscovery()` (single DynamicPSF pass for all candidates).
-- Entering step 2 → runs `runPhotometry()` (uses cached PSF from discovery).
+- Entering step 1 → runs `runDiscovery()` (two DynamicPSF passes: green channel for TG, blue channel for TB; both cached for the photometry step).
+- Entering step 2 → runs `runPhotometry()` (uses both cached PSF sets from discovery).
 - Entering step 5 → runs `generateReport()`.
 
 | Step | Panel | Contents |
 |------|-------|----------|
 | **0 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); CSV path + Browse; **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
 | **1 — Comp Stars** | `compStarsPanel` | TreeBox (5 cols: ✓, Label, AUID, V mag, Δmag, Quality) listing all in-frame V-band candidates; **Check** ComboBox at bottom; `updateCompCount()` label |
-| **2 — Photometry** | `runPanel` | Magnitude + Filter TG + Error (MERR); Raw PSF flux row (T/ensemble/check instrumental mags); `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation) |
+| **2 — Photometry** | `runPanel` | TG magnitude + MERR; TB magnitude + MERR (shows — if blue PSF rejected or no B-band comp data available); TG PSF flux row (instrumental mags); `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation, TG only) |
 | **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
 | **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = red circle, comp stars = green, check = cyan); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
 | **5 — Report** | `reportPanel` | Format RadioButtons (Human readable default, AAVSO Extended); scrollable read-only `TextBox` preview; Export button (opens `SaveFileDialog`, writes immediately) |
@@ -260,7 +263,7 @@ Keep code structured so these are additions, not rewrites. In priority order:
 - ~~**Real `MERR`.**~~ Done: PSF MAD residuals propagated via matched-filter formula; target + comp combined in quadrature.
 - ~~**Ensemble photometry.**~~ Done (v1.2.0): six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars TreeBox; single DynamicPSF discovery pass; ZP = mean(magV_i − instMag_i); `CNAME=ENSEMBLE`, `CMAG=na`; comp labels in NOTES. End-to-end tested with T CrB submission to AAVSO.
 
-- **Multiband TB/TG** from the OSC master (blue channel). Red channel is M-giant-dominated — needs care.
+- ~~**Multiband TB/TG**~~ Done (v1.3.0): blue channel (TB) measured simultaneously with TG via a second DynamicPSF pass; AAVSO report includes one observation line per band. Red channel (TR) is intentionally omitted — M-giant-dominated at quiescence, least diagnostic for outburst detection.
 - **User-specifiable target star.** Currently T CrB is hardcoded; isolate the target definition for easy extension.
 
 - **(Low priority — scientific extensions)**

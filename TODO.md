@@ -94,6 +94,6 @@
 - [x] **UI redesign — tabbed / step-oriented layout.** Implemented as a 6-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report) with a left-pane step navigator and embedded verification thumbnail. Photometry and report auto-trigger on step entry.
 - [x] **Verification image stretch controls.** No Stretch / Auto / Boosted radio buttons embedded in the Verification step; re-render on change without leaving the dialog.
 - [x] **Ensemble photometry (`CNAME=ENSEMBLE`).** Six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars step runs a single DynamicPSF discovery pass on all in-frame V-band candidates; TreeBox shows V mag, Δmag, PSF quality, recommended flag. Default selection: up to 6 stars with Δmag ≤ 2.0 and good PSF. ZP = mean(magV_i − instMag_i); MERR = √(σ_ZP² + σ_T²). Report: `CNAME=ENSEMBLE`, `CMAG=na`, comp labels in NOTES. Single-comp case (N=1) identical to previous format. End-to-end tested with T CrB submission to AAVSO.
-- [ ] Multiband TB/TG (blue channel)
+- [x] Multiband TB/TG (blue channel)
 - [ ] User-specifiable target star
 - [ ] TG→V transformation (`TRANS=YES`)

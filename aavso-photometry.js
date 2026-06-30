@@ -5,7 +5,7 @@
 #feature-info  Differential photometry of variable stars directly inside \
                PixInsight. Requires a linear, plate-solved OSC RGB master \
                stack and a comparison-star CSV from AAVSO VSP. Fits PSFs via \
-               DynamicPSF (green channel, TG band), derives the target \
+               DynamicPSF (TG green + TB blue channels), derives the target \
                magnitude from an ensemble of comp stars (or a single comp), \
                checks quality against a check star, and writes an AAVSO \
                Extended File Format report. Currently configured for T Coronae \
@@ -24,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.2.1";
+const VERSION = "1.3.0";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -174,8 +174,10 @@ function sexagesimalToDeg( s ) {
 const CSV_COLUMNS = [ "AUID", "RA", "Dec", "Label", "Band", "Mag", "Error", "Comments" ];
 
 // Loads and parses the comparison-star CSV.
-// Returns an array of star objects filtered to Band == "V".
-// Each object: { auid, ra, dec, label, magV, error, blended, comments }
+// Returns an array of star objects for all V-band rows, with B-band magnitudes
+// attached where present in the CSV.
+// Each object: { auid, ra, dec, label, magV, errorV, magB, errorB, blended, comments }
+// magB / errorB are null when no B-band row exists for that star.
 // Throws a descriptive Error on any problem.
 function loadComparisonStars( csvPath ) {
    var text = readTextFile( csvPath );
@@ -183,7 +185,8 @@ function loadComparisonStars( csvPath ) {
 
    var pos     = [0];
    var lineNum = 0;
-   var stars   = [];
+   var vStars  = {};  // auid → star object (V-band rows)
+   var bMags   = {};  // auid → { mag, error }
 
    // Validate header
    var header = parseCSVRow( text, pos );
@@ -196,7 +199,7 @@ function loadComparisonStars( csvPath ) {
          );
    }
 
-   // Parse data rows
+   // Parse data rows — collect V and B bands
    while ( pos[0] < text.length ) {
       var fields = parseCSVRow( text, pos );
       lineNum++;
@@ -210,30 +213,49 @@ function loadComparisonStars( csvPath ) {
             " (expected " + CSV_COLUMNS.length + ")"
          );
 
-      if ( fields[4] !== "V" )
-         continue;  // keep only V-band rows
-
-      var comments = fields[7];
-      var blended  = /blend|pair|combined/i.test( comments );
-
-      var magV = parseFloat( fields[5] );
-      if ( !isFinite( magV ) ) {
-         console.warningln( "CSV line " + lineNum + ": skipping star \"" + fields[3] +
-                            "\" — non-numeric magnitude \"" + fields[5] + "\"" );
+      var band = fields[4];
+      if ( band !== "V" && band !== "B" )
          continue;
-      }
 
-      stars.push( {
-         auid    : fields[0],
-         ra      : sexagesimalToDeg( fields[1] ) * 15,  // hours → degrees
-         dec     : sexagesimalToDeg( fields[2] ),        // already degrees
-         label   : fields[3],
-         magV    : magV,
-         error   : parseFloat( fields[6] ),
-         blended : blended,
-         comments: comments,
-      } );
+      var auid = fields[0];
+      var mag  = parseFloat( fields[5] );
+
+      if ( band === "V" ) {
+         if ( !isFinite( mag ) ) {
+            console.warningln( "CSV line " + lineNum + ": skipping star \"" + fields[3] +
+                               "\" — non-numeric V magnitude \"" + fields[5] + "\"" );
+            continue;
+         }
+         var comments = fields[7];
+         var blended  = /blend|pair|combined/i.test( comments );
+         vStars[ auid ] = {
+            auid    : auid,
+            ra      : sexagesimalToDeg( fields[1] ) * 15,  // hours → degrees
+            dec     : sexagesimalToDeg( fields[2] ),        // already degrees
+            label   : fields[3],
+            magV    : mag,
+            errorV  : parseFloat( fields[6] ),
+            magB    : null,   // filled below if a B-band row is present
+            errorB  : null,
+            blended : blended,
+            comments: comments,
+         };
+      } else {  // band === "B"
+         if ( isFinite( mag ) )
+            bMags[ auid ] = { mag: mag, error: parseFloat( fields[6] ) };
+      }
    }
+
+   // Attach B-band magnitudes to matching V-band star objects
+   for ( var k in bMags ) {
+      if ( vStars[k] ) {
+         vStars[k].magB  = bMags[k].mag;
+         vStars[k].errorB = bMags[k].error;
+      }
+   }
+
+   var stars = [];
+   for ( var k in vStars ) stars.push( vStars[k] );
 
    if ( stars.length === 0 )
       throw new Error( "No usable V-band rows found in: " + csvPath );
@@ -254,7 +276,9 @@ function loadAstrometry( window ) {
    var image = window.mainView.image;
    if ( image.numberOfChannels !== 3 )
       throw new Error(
-         "Expected an RGB (3-channel) image; got " + image.numberOfChannels + " channel(s)." );
+         "Expected a debayered OSC (one-shot colour) RGB image (3 channels); got " +
+         image.numberOfChannels + " channel(s). " +
+         "Run the Debayer process on your Bayer-pattern master before running this script." );
 
    var metadata = new AstrometricMetadata( SETTINGS_NS );
    metadata.ExtractMetadata( window );
@@ -294,12 +318,13 @@ function projectStars( metadata, stars, width, height ) {
 // PSF measurement (DynamicPSF)
 // ============================================================
 
-// Fits a Gaussian PSF to each position in starsIn using the green channel
-// (channel 1, PixInsight R/G/B ordering).
+// Fits a Gaussian PSF to each position in starsIn on the given channel.
+// channel: 0=red, 1=green (default, TG), 2=blue (TB) — PixInsight R/G/B ordering.
 // starsIn: array of { label, x, y }
 // Returns an object keyed by label → { B, A, cx, cy, sx, sy, theta, mad }
 //   or null if the fit did not converge for that star.
-function fitPSF( window, starsIn ) {
+function fitPSF( window, starsIn, channel ) {
+   if ( channel === undefined ) channel = 1;  // default: green
    var DPSF = new DynamicPSF;
    DPSF.views         = [ [ window.mainView.id ] ];
    DPSF.autoPSF       = false;
@@ -322,7 +347,7 @@ function fitPSF( window, starsIn ) {
       var y = starsIn[i].y;
       stars.push( [
          0,                          // viewIndex
-         1,                          // channel: green (R=0, G=1, B=2)
+         channel,                    // channel: 1=green (TG), 2=blue (TB)
          DynamicPSF.Star_DetectedOk, // status
          x - PSF_BOX_HALF, y - PSF_BOX_HALF,  // x0, y0
          x + PSF_BOX_HALF, y + PSF_BOX_HALF,  // x1, y1
@@ -831,7 +856,14 @@ class PhotometryDialog extends Dialog {
       var _instMag_Cs     = [];   // instrumental mag for each ensemble entry (parallel array)
       var _ensembleZP     = NaN;  // mean zero-point = mean(magV_i - instMag_i)
       var _targetPix      = null; // cached from discovery
-      var _targetPSF      = null; // cached from discovery
+      var _targetPSF      = null; // cached from discovery (green/TG)
+      var _targetPSF_B    = null; // cached from discovery (blue/TB)
+      var _tcrb_mag_B     = NaN;
+      var _merr_B         = NaN;
+      var _instMag_T_B    = null;
+      var _instMag_Cs_B   = [];
+      var _ensembleZP_B   = NaN;
+      var _instMag_K_B    = null;
 
       // ---- Public result ----
       this.midJD = NaN;
@@ -999,7 +1031,7 @@ class PhotometryDialog extends Dialog {
       titleLbl.text = "<b>" + TITLE + " v" + VERSION + "   ·   Benno Schneider © 2026</b>";
 
       var precon1 = new Label( setupPanel );
-      precon1.text = "✓  Required: linear (unstretched) stack; plate-solved (ImageSolver).";
+      precon1.text = "✓  Required: linear (unstretched) stack; plate-solved (ImageSolver); debayered OSC (one-shot colour) RGB stack.";
 
       var precon2 = new Label( setupPanel );
       precon2.text = "✗  Incompatible (break PSF linearity): any stretch, deconvolution, BlurXTerminator.";
@@ -1211,25 +1243,21 @@ class PhotometryDialog extends Dialog {
       this.linearityLbl.visible     = false;
 
       var magTag = new Label( runPanel );
-      magTag.text          = "Magnitude:";
+      magTag.text          = "TG:";
       magTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       magTag.setFixedWidth( 80 );
+      magTag.toolTip       = "TG = tri-colour green (OSC green channel). " +
+                             "Not the same as Johnson V — TG runs ~0.1–0.3 mag brighter for red stars like T CrB.";
 
       this.magLbl = new Label( runPanel );
       this.magLbl.text    = "—";
       this.magLbl.toolTip = "Derived TG magnitude of " + TARGET.name + " from differential photometry " +
-                            "against the selected comp star. TG (tri-colour green) is not Johnson V — " +
-                            "it runs ~0.1-0.3 mag brighter for red stars.";
+                            "against the selected comp stars (ensemble ZP). TG (tri-colour green) is not " +
+                            "Johnson V — it runs ~0.1–0.3 mag brighter for red stars.";
       this.magLbl.setFixedWidth( 52 );
 
-      var fltTag = new Label( runPanel );
-      fltTag.text          = "Filter: TG";
-      fltTag.textAlignment = TextAlignment.VertCenter;
-      fltTag.toolTip       = "TG = tri-colour green (OSC green channel). " +
-                             "Not the same as Johnson V — TG runs ~0.1-0.3 mag brighter for red stars like T CrB.";
-
       var merrTag = new Label( runPanel );
-      merrTag.text          = "Error (MERR):";
+      merrTag.text          = "MERR:";
       merrTag.textAlignment = TextAlignment.VertCenter;
 
       this.merrLbl = new Label( runPanel );
@@ -1241,19 +1269,48 @@ class PhotometryDialog extends Dialog {
       magRow.spacing = 8;
       magRow.add( magTag );
       magRow.add( this.magLbl );
-      magRow.add( fltTag  );
       magRow.add( merrTag );
       magRow.add( this.merrLbl );
       magRow.addStretch();
 
+      var tbMagTag = new Label( runPanel );
+      tbMagTag.text          = "TB:";
+      tbMagTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+      tbMagTag.setFixedWidth( 80 );
+      tbMagTag.toolTip       = "TB = tri-colour blue (OSC blue channel, calibrated against B-band comp star magnitudes).";
+
+      this.tbMagLbl = new Label( runPanel );
+      this.tbMagLbl.text    = "—";
+      this.tbMagLbl.toolTip = "Derived TB magnitude of " + TARGET.name + " from the blue OSC channel. " +
+                              "Calibrated against B-band magnitudes from the comparison CSV. " +
+                              "Shown as '—' if no comp stars have B-band catalogue data.";
+      this.tbMagLbl.setFixedWidth( 52 );
+
+      var tbMerrTag = new Label( runPanel );
+      tbMerrTag.text          = "MERR:";
+      tbMerrTag.textAlignment = TextAlignment.VertCenter;
+
+      this.tbMerrLbl = new Label( runPanel );
+      this.tbMerrLbl.text    = "—";
+      this.tbMerrLbl.toolTip = "Photometric error for TB magnitude.";
+
+      var tbMagRow = new HorizontalSizer;
+      tbMagRow.spacing = 8;
+      tbMagRow.add( tbMagTag );
+      tbMagRow.add( this.tbMagLbl );
+      tbMagRow.add( tbMerrTag );
+      tbMagRow.add( this.tbMerrLbl );
+      tbMagRow.addStretch();
+
       var instTag = new Label( runPanel );
-      instTag.text          = "Raw PSF flux:";
+      instTag.text          = "TG PSF flux:";
       instTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       instTag.setFixedWidth( 80 );
-      instTag.toolTip       = "Instrumental magnitudes = -2.5 × log₁₀(PSF flux). " +
+      instTag.toolTip       = "Green-channel instrumental magnitudes = -2.5 × log₁₀(PSF flux). " +
                               "These are raw, instrument-dependent values. " +
                               "Differential photometry cancels all systematic offsets: " +
-                              TARGET.name + " magnitude = comp catalog V + (inst T − inst C).";
+                              TARGET.name + " magnitude = comp catalog V + (inst T − inst C). " +
+                              "TB blue-channel PSF values appear in the Process Console.";
 
       this.instLbl = new Label( runPanel );
       this.instLbl.text    = "—";
@@ -1275,6 +1332,7 @@ class PhotometryDialog extends Dialog {
       runPanelSizer.add( this.linearityLbl  );
       runPanelSizer.addSpacing( 8 );
       runPanelSizer.add( magRow             );
+      runPanelSizer.add( tbMagRow           );
       runPanelSizer.add( instRow            );
       runPanelSizer.add( this.compCheckLbl  );
       runPanelSizer.add( this.checkGateLbl  );
@@ -1939,6 +1997,7 @@ class PhotometryDialog extends Dialog {
          _checkEligible   = [];
          _targetPix       = null;
          _targetPSF       = null;
+         _targetPSF_B     = null;
 
          self.compTreeBox.clear();
          discoveryLbl.text = "Running discovery…";
@@ -1992,12 +2051,20 @@ class PhotometryDialog extends Dialog {
          inFrame.forEach( function(e) {
             psfInput.push( { label: e.star.label, x: e.x, y: e.y } );
          });
-         var psfFits = fitPSF( _window, psfInput );
+         var psfFits   = fitPSF( _window, psfInput );      // green channel (TG)
+         var psfFits_B = fitPSF( _window, psfInput, 2 );  // blue channel (TB)
 
-         _targetPSF = psfFits[ TARGET.name ];
+         _targetPSF   = psfFits[   TARGET.name ];
+         _targetPSF_B = psfFits_B[ TARGET.name ];
          var targetReject = checkPSFQuality( _targetPSF, _targetPix.x, _targetPix.y );
          if ( targetReject )
             throw new Error( TARGET.name + " PSF rejected: " + targetReject );
+         var targetRejectB = checkPSFQuality( _targetPSF_B, _targetPix.x, _targetPix.y );
+         if ( targetRejectB ) {
+            console.warningln( TARGET.name + " blue-channel PSF rejected: " + targetRejectB +
+                               " — TB will not be computed." );
+            _targetPSF_B = null;
+         }
 
          function psfLine( psf ) {
             if ( !psf ) return "fit failed";
@@ -2008,9 +2075,12 @@ class PhotometryDialog extends Dialog {
 
          // Build _allInFrame
          inFrame.forEach( function(e) {
-            var psf     = psfFits[ e.star.label ];
-            var qMsg    = checkPSFQuality( psf, e.x, e.y );
-            var instMag = ( !qMsg && psf ) ? psfInstrumentalMag( psf ) : null;
+            var psf     = psfFits[   e.star.label ];
+            var psfB    = psfFits_B[ e.star.label ];
+            var qMsg    = checkPSFQuality( psf,  e.x, e.y );
+            var qMsgB   = checkPSFQuality( psfB, e.x, e.y );
+            var instMag  = ( !qMsg  && psf  ) ? psfInstrumentalMag( psf  ) : null;
+            var instMagB = ( !qMsgB && psfB ) ? psfInstrumentalMag( psfB ) : null;
             var delta   = Math.abs( e.star.magV - TARGET.magQuiescence );
             var notes;
             if      ( qMsg )                        notes = qMsg;
@@ -2024,7 +2094,9 @@ class PhotometryDialog extends Dialog {
                x          : e.x,
                y          : e.y,
                psf        : psf,
+               psfB       : psfB,
                instMag    : instMag,
+               instMagB   : instMagB,
                qualityMsg : qMsg || null,
                deltaMag   : delta,
                recommended: recommended,
@@ -2083,8 +2155,16 @@ class PhotometryDialog extends Dialog {
          _instMag_K       = null;
          _ensembleZP      = NaN;
          _checkGateWarn   = false;
+         _tcrb_mag_B      = NaN;
+         _merr_B          = NaN;
+         _instMag_T_B     = null;
+         _instMag_Cs_B    = [];
+         _ensembleZP_B    = NaN;
+         _instMag_K_B     = null;
          self.magLbl.text           = "—";
          self.merrLbl.text          = "—";
+         self.tbMagLbl.text         = "—";
+         self.tbMerrLbl.text        = "—";
          self.instLbl.text          = "—";
          self.compCheckLbl.text     = "—";
          self.checkGateLbl.visible  = false;
@@ -2238,6 +2318,56 @@ class PhotometryDialog extends Dialog {
          var checkReject = checkEntry ? checkEntry.qualityMsg : null;
          _instMag_K = ( checkEntry && !checkReject ) ? checkEntry.instMag : null;
 
+         // ---- TB photometry (blue channel, B-band comp star magnitudes) ----
+         if ( _targetPSF_B !== null ) {
+            _instMag_T_B = psfInstrumentalMag( _targetPSF_B );
+         }
+         if ( _instMag_T_B !== null ) {
+            var zpValuesB = [];
+            _instMag_Cs_B = [];
+            _ensembleEntries.forEach( function(e) {
+               if ( e.star.magB === null || e.instMagB === null ) {
+                  _instMag_Cs_B.push( null );
+               } else {
+                  _instMag_Cs_B.push( e.instMagB );
+                  zpValuesB.push( e.star.magB - e.instMagB );
+               }
+            });
+            if ( zpValuesB.length > 0 ) {
+               _ensembleZP_B = zpValuesB.reduce( function(a,b) { return a+b; } ) / zpValuesB.length;
+               _tcrb_mag_B   = _ensembleZP_B + _instMag_T_B;
+               var sigT_B = psfMagError( _targetPSF_B );
+               var sigZP_B;
+               if ( zpValuesB.length >= 2 ) {
+                  var zpMeanB = _ensembleZP_B;
+                  var zpVarB  = zpValuesB.reduce( function(acc, zp) {
+                     return acc + (zp - zpMeanB) * (zp - zpMeanB);
+                  }, 0 ) / zpValuesB.length;
+                  sigZP_B = Math.sqrt( zpVarB ) / Math.sqrt( zpValuesB.length );
+               } else {
+                  var bEntry = _ensembleEntries.find( function(e) { return e.instMagB !== null; } );
+                  sigZP_B = bEntry ? psfMagError( bEntry.psfB ) : null;
+               }
+               _merr_B = ( sigT_B !== null && sigZP_B !== null )
+                       ? Math.sqrt( sigT_B * sigT_B + sigZP_B * sigZP_B ) : 0.999;
+               if ( _merr_B === 0.999 )
+                  console.warningln( "TB MERR: PSF noise estimation failed — set to 0.999" );
+               console.writeln( format( "  %ls = %.3f TB   MERR = %.3f   ZP_B = %.4f",
+                                        TARGET.name, _tcrb_mag_B, _merr_B, _ensembleZP_B ) );
+               console.writeln( "  TB inst T = " + format( "%.4f", _instMag_T_B ) );
+               _ensembleEntries.forEach( function(e, i) {
+                  if ( _instMag_Cs_B[i] !== null )
+                     console.writeln( "  TB comp " + e.star.label + ": inst=" +
+                                      format("%.4f", _instMag_Cs_B[i]) +
+                                      "  B=" + format("%.3f", e.star.magB) );
+               });
+            } else {
+               console.warningln( "TB: no comp stars with B-band catalogue magnitudes — TB skipped." );
+            }
+         }
+         if ( checkEntry && !checkReject && checkEntry.instMagB !== null )
+            _instMag_K_B = checkEntry.instMagB;
+
          // Verification image (baked into _verifyArgs for reRenderVerify)
          _verifyArgs = {
             win         : _window,
@@ -2282,8 +2412,10 @@ class PhotometryDialog extends Dialog {
             "Comp: " + cname + "    Check: " +
             ( _checkStar ? _checkStar.label + " (" + format("%.3f",_checkStar.magV) + " V)" : "none" );
 
-         self.magLbl.text  = format( "%.3f", _tcrb_mag );
-         self.merrLbl.text = format( "%.3f", _merr );
+         self.magLbl.text    = format( "%.3f", _tcrb_mag );
+         self.merrLbl.text   = format( "%.3f", _merr );
+         self.tbMagLbl.text  = !isNaN( _tcrb_mag_B ) ? format( "%.3f", _tcrb_mag_B ) : "—";
+         self.tbMerrLbl.text = !isNaN( _merr_B )     ? format( "%.3f", _merr_B )     : "—";
 
          var instLine = TARGET.name + ": " + format( "%.4f", _instMag_T );
          _ensembleEntries.forEach( function(e, i) {
@@ -2331,14 +2463,26 @@ class PhotometryDialog extends Dialog {
                    + (stackInfo ? "; " + stackInfo : "")
                    + (moonVal   ? "; " + moonVal   : "");
 
+         var tbNotes = null;
+         if ( !isNaN(_tcrb_mag_B) ) {
+            var tbCompList = _ensembleEntries
+               .filter( function(e) { return e.star.magB !== null && e.instMagB !== null; } )
+               .map( function(e) { return e.star.label; } ).join("+");
+            tbNotes = "TB blue channel; DynamicPSF"
+                    + "; comp " + tbCompList
+                    + ( _checkStar ? "; check " + _checkStar.label : "" )
+                    + (stackInfo ? "; " + stackInfo : "")
+                    + (moonVal   ? "; " + moonVal   : "");
+         }
+
          _reportText = self.rbHuman.checked
-            ? buildHumanReport( midJD, amassStr, kmag, notes )
-            : buildAavsoReport( midJD, amassStr, kmag, notes );
+            ? buildHumanReport( midJD, amassStr, kmag, notes, tbNotes )
+            : buildAavsoReport( midJD, amassStr, kmag, notes, tbNotes );
 
          self.reportBox.text = _reportText;
       }
 
-      function buildHumanReport( midJD, amassStr, kmag, notes ) {
+      function buildHumanReport( midJD, amassStr, kmag, notes, tbNotes ) {
          function kv( key, val ) {
             return (key + ":                   ").slice( 0, 20 ) + val;
          }
@@ -2354,8 +2498,10 @@ class PhotometryDialog extends Dialog {
             bar,
             "",
             kv( "Target",          TARGET.name                                        ),
-            kv( "Magnitude",       format( "%.3f", _tcrb_mag ) + " TG"               ),
-            kv( "Magnitude error", format( "%.3f", _merr     )                        ),
+            kv( "Magnitude (TG)",  format( "%.3f", _tcrb_mag ) + " TG"               ),
+            kv( "Error (TG)",      format( "%.3f", _merr     )                        ),
+            kv( "Magnitude (TB)",  tbNotes !== null ? format( "%.3f", _tcrb_mag_B ) + " TB" : "—" ),
+            kv( "Error (TB)",      tbNotes !== null ? format( "%.3f", _merr_B )               : "—" ),
             "",
             kv( "Date (UTC)",      jdToISO( midJD )                                  ),
             kv( "Date (JD)",       format( "%.6f", midJD )                            ),
@@ -2393,7 +2539,7 @@ class PhotometryDialog extends Dialog {
          return lines.join( "\n" );
       }
 
-      function buildAavsoReport( midJD, amassStr, kmag, notes ) {
+      function buildAavsoReport( midJD, amassStr, kmag, notes, tbNotes ) {
          var headerLines = [
             "#TYPE=EXTENDED",
             "#OBSCODE=" + self.obscodeEdit.text.replace( /[\r\n]/g, "" ).trim(),
@@ -2406,7 +2552,7 @@ class PhotometryDialog extends Dialog {
          var cname = N === 1 ? sanitizeField( _ensembleEntries[0].star.auid ) : "ENSEMBLE";
          var cmag  = N === 1 ? format( "%.4f", _instMag_Cs[0] ) : "na";
          var kname = _checkStar ? sanitizeField( _checkStar.auid ) : "na";
-         var dataLine = [
+         var tgLine = [
             TARGET.name,
             format( "%.6f", midJD      ),
             format( "%.3f", _tcrb_mag  ),
@@ -2418,7 +2564,26 @@ class PhotometryDialog extends Dialog {
             "na", CHART,
             sanitizeField( notes ),
          ].join( "," );
-         return headerLines.join( "\n" ) + "\n" + dataLine + "\n";
+         var output = headerLines.join( "\n" ) + "\n" + tgLine;
+         if ( tbNotes !== null ) {
+            var tbCmag  = ( N === 1 && _instMag_Cs_B[0] !== null && _instMag_Cs_B[0] !== undefined )
+                        ? format( "%.4f", _instMag_Cs_B[0] ) : "na";
+            var tbKmag  = ( _instMag_K_B !== null ) ? format( "%.4f", _instMag_K_B ) : "na";
+            var tbLine  = [
+               TARGET.name,
+               format( "%.6f", midJD        ),
+               format( "%.3f", _tcrb_mag_B  ),
+               format( "%.3f", _merr_B      ),
+               "TB", "NO", "STD",
+               cname, tbCmag,
+               kname, tbKmag,
+               amassStr,
+               "na", CHART,
+               sanitizeField( tbNotes ),
+            ].join( "," );
+            output += "\n" + tbLine;
+         }
+         return output + "\n";
       }
    }
 }

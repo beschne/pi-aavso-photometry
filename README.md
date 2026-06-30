@@ -13,12 +13,15 @@ stars directly inside PixInsight and writes an **AAVSO Extended File Format** re
 Currently configured for **T Coronae Borealis** ("Blaze Star"), a recurrent nova
 expected to brighten by ~8 magnitudes from quiescence (~10 mag) to outburst (~2 mag).
 
+The script measures in **two photometric bands per run** — TG (green channel, V-calibrated)
+and TB (blue channel, B-calibrated) — and writes one AAVSO observation line per band.
+
 The script reuses PixInsight's own facilities — the astrometric WCS solution,
 FITS keywords, and DynamicPSF — rather than reimplementing them externally.
 
 The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-time → Verification → Report.
 
-![Setup step](screenshots/screenshot%2C%20v1.2.0%2C%20%281%29%20setup.png)
+![Setup step](screenshots/screenshot%2C%20v1.3.0%2C%20%281%29%20setup.png)
 ![Comp Stars step](screenshots/screenshot%2C%20v1.2.0%2C%20%282%29%20comp%20stars.png)
 
 ---
@@ -26,13 +29,14 @@ The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-
 ## Requirements
 
 - **PixInsight 1.9.4 "Lockhart"** or later (V8 JS engine required)
-- An open, plate-solved OSC RGB master light stack
+- An open, plate-solved OSC (one-shot colour) RGB master light stack, debayered in PixInsight
 - A comparison-star CSV exported from [AAVSO VSP](https://www.aavso.org/vsp)
 
 ## Input image preconditions
 
 | Condition | Status |
 |-----------|--------|
+| Debayered OSC (one-shot colour) RGB stack | **Required** — TG and TB are extracted from separate colour channels; a monochrome image is rejected at startup |
 | Linear (unstretched) stack | **Required** — PSF flux is non-linear on a stretched image |
 | Plate-solved (ImageSolver) | **Required** — coordinate projection depends on the WCS solution |
 | Any stretch applied | **Incompatible** — breaks PSF linearity |
@@ -99,10 +103,11 @@ Click any row to toggle it. Select the **Check star** from the dropdown at the b
 **Step 3 — Photometry**
 
 Photometry runs automatically when you click this step. The panel shows:
-- **Magnitude** (TG band), **Filter: TG**, **Error (MERR)**
-- **Raw PSF flux** — the instrumental magnitudes for target, comp ensemble, and check
+- **TG** magnitude and **MERR** — green channel, calibrated against V-band comp star magnitudes
+- **TB** magnitude and **MERR** — blue channel, calibrated against B-band comp star magnitudes (shows — only if the blue PSF failed; all stars in a standard AAVSO VSP export include B magnitudes)
+- **TG PSF flux** — the instrumental magnitudes for target, comp ensemble, and check star (green channel)
 - A red warning if incompatible processes are detected in the image history
-- An orange warning if the check-star deviation exceeds 3×MERR
+- An orange warning if the check-star deviation from catalogue V exceeds 3×MERR
 
 **Step 4 — Mid-time**
 
@@ -140,6 +145,30 @@ with a `.txt` extension.
 
 T CrB is expected to brighten by ~8 magnitudes from quiescence (~10 V) to nova peak (~2 V).
 
+### Why TB matters most for outburst detection
+
+T CrB is a symbiotic system: a cool M3 III red giant transfers mass to a white dwarf
+via an accretion disk. At quiescence the M giant dominates the combined light. As
+accretion increases before and during the outburst, the hot WD and disk brighten —
+and this hot emission peaks in the UV/blue rather than the red.
+
+| Band | Channel | Calibrated against | Quiescent M-giant contribution | Sensitivity to WD/disk brightening |
+|------|---------|--------------------|-------------------------------|-------------------------------------|
+| **TB** | Blue | B-band comp mags | Low (M3 III has B−V ≈ +1.6) | **Highest** |
+| **TG** | Green | V-band comp mags | Moderate | Medium |
+| TR | Red | Rc-band comp mags | Dominant | Lowest |
+
+The **TB−TG colour index** approximates B−V. At quiescence TB is significantly
+fainter than TG because the M giant emits little blue light. As the hot component
+brightens, this gap narrows — TB brightens faster than TG. A sustained blueward
+shift in TB−TG (index decreasing toward zero) can be an early warning of
+increased accretion or nova onset, potentially visible before TG shows a
+significant magnitude change.
+
+This is why TR is not measured: at quiescence the red channel is overwhelmingly
+M-giant photospheric emission; the WD/disk contribution is a small fraction of the
+total Rc flux, making TR the least sensitive band for detecting nova precursors.
+
 ### Stage 1 — Early brightening (~7–9 mag): change comp/check labels
 
 Chart **X42597QE** contains brighter comp stars for this stage:
@@ -172,19 +201,22 @@ outburst begins — monitor [aavso.org/news](https://www.aavso.org/news).
 
 ## Known limitations
 
-**TG band ≠ Johnson V.** The script reports in the **TG** (tri-colour green) band, not
-Johnson V. TG runs ~0.1–0.3 mag brighter than V for red stars — significant because
-T CrB has an M3 III companion that dominates at quiescence. The AAVSO report correctly
-records `FILT=TG` and `TRANS=NO`. Never relabel TG measurements as V.
+**TG and TB ≠ Johnson V and B.** The script reports in the **TG** (tri-colour green)
+and **TB** (tri-colour blue) bands, not Johnson V or B. OSC passbands differ from
+standard filter bandpasses; TG runs ~0.1–0.3 mag brighter than V for red stars because
+the OSC green filter has a different effective wavelength than the standard V bandpass.
+The equivalent offset applies in TB vs B. The AAVSO reports correctly record `FILT=TG`
+and `FILT=TB` with `TRANS=NO`. Never relabel TG or TB measurements as V or B.
+
+**TB−TG is not a calibrated B−V index.** The colour difference approximates B−V
+qualitatively but carries the combined uncalibrated offsets of both passbands.
+It is best used as a relative indicator of colour change over time, not as an
+absolute colour index.
 
 **Seestar FOV constraint at nova peak.** The Seestar S50 has a ~1.4° × 1.0° FOV.
 At nova peak (~2 mag) the nearest suitable comparison stars (1–4 mag) may lie outside
 this window. In that case consider a wider-field instrument, visual observation, or
-ensemble photometry of fainter in-frame stars (planned feature).
-
-**Single comp star.** The current version uses one comp star and one check star.
-Ensemble photometry (multiple comp stars) is a planned post-v1 feature and will reduce
-the sensitivity to any single comparison star's variability or measurement noise.
+ensemble photometry of fainter in-frame stars.
 
 **DATE-OBS unreliable for stacked masters.** PixInsight's `ImageIntegration` writes
 `DATE-OBS` as the midpoint of sub *start* times, ignoring exposure duration. Always
@@ -199,7 +231,7 @@ actual subframes rather than trusting the stack's `DATE-OBS`.
 |-----------------|-------|-----|
 | *No active image window* | No stack is open, or it is not the active window | Open the master stack and click its title bar |
 | *Not a plate-solved image* | No WCS solution found | Run `Script > Astronomy > ImageSolver` on the stack first |
-| *Expected an RGB (3-channel) image* | Image is grayscale or a luminance extract | Use the full OSC master, not a channel extraction |
+| *Expected a debayered OSC … RGB image* | Image is monochrome, a single-channel extract, or an undebayered Bayer raw | Run the Debayer process in PixInsight first, then use the full debayered RGB master |
 | *Star outside the image frame* | Comp or check star label not in the FOV | Choose a different label from the dropdown |
 | *PSF rejected — too faint* | Star too dim for a reliable Gaussian fit | Choose a brighter comp/check label |
 | *PSF rejected — saturated* | Star clipped in the master | Choose a fainter comp/check label or reduce exposure |
@@ -214,9 +246,8 @@ actual subframes rather than trusting the stack's `DATE-OBS`.
 **Human-readable report** (default): a formatted text summary suitable for personal
 records and quick review.
 
-**AAVSO Extended Format** (on demand): 15-field CSV for direct submission via
-the [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) form (select **File upload**). Key choices:
-`FILT=TG`, `TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
+**AAVSO Extended Format** (on demand): comma-delimited CSV for direct submission via
+the [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) form (select **File upload**). The report contains one observation line per measured band (`FILT=TG` and `FILT=TB`), sharing the same DATE, AMASS, and CHART. Key choices: `TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
 
 ---
 
@@ -234,13 +265,13 @@ To install it:
 
 | Source file (`screenshots/`) | Install as (`images/`) |
 |------------------------------|------------------------|
-| `screenshot, v1.2.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.3.0, (1) setup.png` | `setup.png` |
 | `screenshot, v1.2.0, (2) comp stars.png` | `comp-stars.png` |
-| `screenshot, v1.2.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v1.3.0, (3) photometry.png` | `photometry.png` |
 | `screenshot, v1.2.0, (4) mid-time.png` | `mid-time.png` |
 | `screenshot, v1.2.0, (5) verification.png` | `verification.png` |
-| `screenshot, v1.2.0, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v1.2.0, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v1.3.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.3.0, (6) report, aavso.png` | `report-aavso.png` |
 
 ---
 
@@ -266,8 +297,9 @@ TODO.md                      Build checklist and roadmap
 
 ## Roadmap
 
-- Ensemble photometry (`CNAME=ENSEMBLE`)
-- TG→V colour transformation (`TRANS=YES`)
+- ~~Ensemble photometry~~ — done (v1.2.0)
+- ~~Multiband TG + TB~~ — done (v1.3.0)
+- TG→V, TB→B colour transformation (`TRANS=YES`)
 - User-specifiable target star
 
 ---

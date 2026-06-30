@@ -3,7 +3,7 @@
 <head>
    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
    <title>PixInsight Reference Documentation | AAVSO Photometry</title>
-   <meta name="keywords" content="photometry, variable star, differential photometry, AAVSO, T CrB, nova, PSF, TG band" />
+   <meta name="keywords" content="photometry, variable star, differential photometry, AAVSO, T CrB, nova, PSF, TG band, TB band, colour index" />
    <meta name="author" content="Benno Schneider" />
    <meta name="description" content="Differential PSF photometry of variable stars inside PixInsight with AAVSO Extended Format report export." />
    <meta name="robots" content="INDEX,FOLLOW" />
@@ -28,11 +28,11 @@
 <hr class="separator"/>
 
 <div id="brief">
-<p>Differential PSF photometry of variable stars directly inside PixInsight, with export to the AAVSO Extended File Format for submission to <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a>. Preconfigured for T&nbsp;Coronae Borealis (the &ldquo;Blaze Star&rdquo;). <a href="#__contents__">[more]</a></p>
+<p>Differential PSF photometry of variable stars directly inside PixInsight in two bands simultaneously (TG green and TB blue), with export to the AAVSO Extended File Format for submission to <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a>. Preconfigured for T&nbsp;Coronae Borealis (the &ldquo;Blaze Star&rdquo;). <a href="#__contents__">[more]</a></p>
 </div>
 
 <div id="keywords">
-<p><strong>Keywords:</strong> photometry, variable star, differential photometry, AAVSO, T CrB, nova, PSF, TG band</p>
+<p><strong>Keywords:</strong> photometry, variable star, differential photometry, AAVSO, T CrB, nova, PSF, TG band, TB band, colour index</p>
 </div>
 
 <h3 class="pidoc_sectionTitle" id="__toc__">Contents</h3>
@@ -75,13 +75,28 @@
 
 <p>This script performs <em>differential PSF photometry</em> of a variable star against one or more comparison stars of known magnitude, using only the tools already present in PixInsight: the WCS astrometric solution from <a href="../../scripts/ImageSolver/ImageSolver.html">ImageSolver</a>, the Gaussian PSF fitter from <a href="../../tools/DynamicPSF/DynamicPSF.html">DynamicPSF</a>, and the FITS keywords written by the standard calibration and integration pipeline.</p>
 
-<p>The script is currently preconfigured for <strong>T&nbsp;Coronae Borealis</strong> (T&nbsp;CrB), a recurrent nova known as the &ldquo;Blaze Star&rdquo;. At quiescence T&nbsp;CrB sits near 10th magnitude; an outburst is predicted to bring it to approximately 2nd magnitude &mdash; an increase of roughly 8 magnitudes in a few days. The script measures the brightness of T&nbsp;CrB in the <strong>TG</strong> (tri-colour green) photometric band and writes the result in the <strong>AAVSO Extended File Format</strong> for direct upload to <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a>.</p>
+<p>The script is currently preconfigured for <strong>T&nbsp;Coronae Borealis</strong> (T&nbsp;CrB), a recurrent nova known as the &ldquo;Blaze Star&rdquo;. At quiescence T&nbsp;CrB sits near 10th magnitude; an outburst is predicted to bring it to approximately 2nd magnitude &mdash; an increase of roughly 8 magnitudes in a few days. The script measures the brightness of T&nbsp;CrB in both the <strong>TG</strong> (tri-colour green) and <strong>TB</strong> (tri-colour blue) photometric bands and writes the results in the <strong>AAVSO Extended File Format</strong> for direct upload to <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a>.</p>
 
-<p>The script works on a single <em>linear</em>, <em>plate-solved</em> OSC RGB master light stack. It measures each star by fitting a two-dimensional Gaussian PSF to the green channel, computes instrumental magnitudes from the fitted flux, and applies the standard differential photometry formula:</p>
+<p>The script works on a single <em>linear</em>, <em>plate-solved</em> OSC (one-shot colour) RGB master light stack. It measures each star by fitting a two-dimensional Gaussian PSF to the green and blue channels independently, computes instrumental magnitudes from the fitted flux, and applies the standard differential photometry formula per band:</p>
 
 <p style="margin-left:2em;font-style:italic;">mag(T CrB) = mag_catalogue(comp) + instMag(T CrB) &minus; instMag(comp)</p>
 
-<p>A check star provides an independent quality gate: if its derived magnitude deviates from catalogue by more than 3&times;MERR, a warning is shown.</p>
+<p>A check star provides an independent quality gate on the TG band: if its derived magnitude deviates from catalogue V by more than 3&times;MERR, a warning is shown.</p>
+
+<h4>Why TG and TB? Why not TR?</h4>
+
+<p>T&nbsp;CrB is a <em>symbiotic</em> system: a cool M3&nbsp;III red giant transfers mass to a white dwarf (WD) via an accretion disk. At quiescence the M giant dominates the combined optical light. As accretion increases before and during the outburst, the hot WD and disk brighten, and this emission peaks in the UV/blue rather than the red. The choice of bands follows directly from the target physics:</p>
+
+<dl class="pidoc_list">
+<dt><p>TG &mdash; tri-colour green (OSC green channel, V-calibrated)</p></dt>
+<dd><p>The primary band. V-band has the deepest historical coverage in the AAVSO database, so TG observations are directly comparable to decades of archival T&nbsp;CrB photometry. The M giant contributes moderately at green wavelengths, giving a useful measure of the total system brightness.</p></dd>
+
+<dt><p>TB &mdash; tri-colour blue (OSC blue channel, B-calibrated)</p></dt>
+<dd><p>The most sensitive band for outburst detection. A typical M3&nbsp;III giant has B&minus;V&nbsp;&asymp;&nbsp;+1.6, so the M giant contributes minimally at B wavelengths. Any brightening of the hot component (WD, disk, or nova ejecta) appears as a disproportionate increase in TB. The colour index <strong>TB&minus;TG</strong> approximates B&minus;V: at quiescence the index is large and positive (the system is red); as the hot component brightens, the index decreases toward zero (the system becomes bluer). A sustained blueward shift in TB&minus;TG can be an early warning of increased accretion or nova onset, potentially detectable before TG shows a significant magnitude change.</p></dd>
+
+<dt><p>TR (red channel) &mdash; not measured</p></dt>
+<dd><p>At quiescence, Rc-band flux is overwhelmingly dominated by M-giant photospheric emission. The WD/disk contribution is a small fraction of the total Rc flux, making TR the least sensitive band for detecting accretion changes or nova precursors. The Rc&rarr;TR colour correction for M stars is also large in the absence of transformation coefficients. For these reasons TR is not implemented in this script.</p></dd>
+</dl>
 
    </div>
 </div>
@@ -102,14 +117,14 @@
 <ul class="pidoc_list">
 <li><strong>Linear (unstretched)</strong> &mdash; PSF flux is non-linear on a stretched image; photometry on a stretched image is meaningless.</li>
 <li><strong>Plate-solved</strong> &mdash; an astrometric WCS solution must be stored in the image (run <a href="../../scripts/ImageSolver/ImageSolver.html">ImageSolver</a> if needed).</li>
-<li><strong>RGB (three channels)</strong> &mdash; the script uses the green channel (index&nbsp;1).</li>
+<li><strong>Debayered OSC (one-shot colour) RGB &mdash; three channels</strong> &mdash; an OSC camera records all three colours simultaneously on a single Bayer-pattern sensor; the raw master must be run through the PixInsight <em>Debayer</em> process to produce an RGB image before running this script. TG is extracted from the green channel (index&nbsp;1) and TB from the blue channel (index&nbsp;2). A monochrome (single-channel) image is rejected at start-up; monochrome cameras cannot produce TG or TB from a single exposure.</li>
 </ul>
 <p>The following processes are <em>compatible</em> because they cancel in the differential magnitude calculation: background extraction (ABE, DBE, GradientCorrection) and SpectrophotometricColorCalibration (SPCC).</p>
 <p>The following processes are <em>incompatible</em> and will be flagged by the script if their names appear in the FITS HISTORY keywords: HistogramTransformation, GHSStretch, MaskedStretch, CurveTransformation, Deconvolution, BlurXTerminator, LocalHistogramEqualization, ExponentialTransformation, HDRMultiscaleTransform.</p>
 </dd>
 
 <dt><p>AAVSO VSP comparison-star CSV</p></dt>
-<dd><p>A photometry table exported from the <a href="https://www.aavso.org/vsp">AAVSO Variable Star Plotter</a> in CSV format. The script filters for V-band rows and projects each in-frame star onto the image using the plate-solve solution.</p></dd>
+<dd><p>A photometry table exported from the <a href="https://www.aavso.org/vsp">AAVSO Variable Star Plotter</a> in CSV format. The script reads both V-band and B-band rows from the CSV. Standard AAVSO VSP exports include V, B, Rc, and Ic rows for each comparison star, so no special export option is required. The script uses V magnitudes to calibrate the TG band and B magnitudes to calibrate the TB band, attaching both to each comparison star object at load time.</p></dd>
 </dl>
 
    </div>
@@ -213,11 +228,14 @@
 <p>Photometry runs automatically when this step is entered. The panel shows the results immediately.</p>
 
 <dl class="pidoc_list">
-<dt><p>Magnitude / Filter / Error</p></dt>
-<dd><p>The derived magnitude of T&nbsp;CrB in the TG band, the filter label (<strong>TG</strong>), and the magnitude error MERR. MERR is propagated from the PSF fit residuals of both the target and the comparison star, combined in quadrature using a matched-filter formula.</p></dd>
+<dt><p>TG magnitude and MERR</p></dt>
+<dd><p>The derived magnitude of T&nbsp;CrB in the TG band (green OSC channel, calibrated against V-band catalogue magnitudes) and its error MERR. MERR is propagated from the PSF fit residuals (MAD) of both the target and the comparison ensemble, combined in quadrature using a matched-filter formula.</p></dd>
 
-<dt><p>Raw PSF flux (instrumental magnitudes)</p></dt>
-<dd><p>The instrumental magnitudes &minus;2.5&nbsp;log<sub>10</sub>(flux) for the target (T&nbsp;CrB), the ensemble (mean zero-point from all selected comp stars), and the check star, with labels. These are the raw values before the catalogue offset is applied. Negative instrumental magnitudes are normal for bright stars.</p></dd>
+<dt><p>TB magnitude and MERR</p></dt>
+<dd><p>The derived magnitude of T&nbsp;CrB in the TB band (blue OSC channel, calibrated against B-band catalogue magnitudes) and its error. Computed from an independent PSF fit to the blue channel. Shown as &ldquo;&mdash;&rdquo; if the blue-channel PSF for the target was rejected by the quality filter; this is uncommon with well-exposed data. All comparison stars in a standard AAVSO VSP export include B-band catalogue magnitudes, so the TB result is available by default.</p></dd>
+
+<dt><p>TG PSF flux (instrumental magnitudes)</p></dt>
+<dd><p>The green-channel instrumental magnitudes &minus;2.5&nbsp;log<sub>10</sub>(flux) for the target (T&nbsp;CrB), the ensemble comp stars, and the check star, with labels. These are the raw values before the catalogue offset is applied; negative values are normal for bright stars. Blue-channel instrumental magnitudes are printed in the Process Console.</p></dd>
 
 <dt><p>Ensemble / Check star</p></dt>
 <dd><p>The number of ensemble comp stars (N) and their combined zero-point, plus the AAVSO chart label and catalogue V magnitude of the check star.</p></dd>
@@ -343,6 +361,8 @@
 
 <p>T&nbsp;CrB is expected to brighten by approximately 8 magnitudes from quiescence (~10&nbsp;V) to nova peak (~2&nbsp;V). As the target brightens the optimal comparison stars change.</p>
 
+<p><strong>Watch the TB&minus;TG colour index.</strong> At quiescence the system appears red (large positive TB&minus;TG) because the M giant dominates. As the hot white dwarf or accretion disk brightens, the system becomes bluer and TB&minus;TG decreases. A sustained blueward shift in this index &mdash; TB brightening faster than TG over multiple nights &mdash; is a potential early warning of nova onset, detectable before the TG magnitude changes significantly.</p>
+
 <p><strong>Early brightening (~7&ndash;9&nbsp;mag):</strong> Chart X42597QE contains brighter comparison stars. In the <strong>Comp Stars</strong> step (step&nbsp;2), untick the fainter stars and tick the brighter ones; also update the <strong>Check</strong> drop-down accordingly:</p>
 
 <table>
@@ -364,19 +384,19 @@
    <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Output', this );">[hide]</p>
    <div id="Output">
 
-<p>The AAVSO Extended File Format report consists of a file header followed by one observation line.</p>
+<p>The AAVSO Extended File Format report consists of a file header followed by one observation line per measured band. When both TG and TB are available, the file contains two data lines with the same DATE, AMASS, CNAME, and CHART but different FILT, MAG, MERR, CMAG, and KMAG values.</p>
 
 <p><strong>File header:</strong></p>
 <pre>
 #TYPE=EXTENDED
 #OBSCODE=&lt;observer code&gt;
-#SOFTWARE=AAVSO Photometry 1.2.1
+#SOFTWARE=AAVSO Photometry 1.3.0
 #DELIM=,
 #DATE=JD
 #OBSTYPE=CCD
 </pre>
 
-<p><strong>Observation fields</strong> (15 comma-delimited fields):</p>
+<p><strong>Observation fields</strong> (15 comma-delimited fields, repeated for each band):</p>
 
 <dl class="pidoc_list">
 <dt><p>NAME</p></dt>
@@ -386,13 +406,13 @@
 <dd><p>Mid-exposure Julian Date (JD), as confirmed in step&nbsp;3.</p></dd>
 
 <dt><p>MAG</p></dt>
-<dd><p>Derived TG magnitude of T&nbsp;CrB.</p></dd>
+<dd><p>Derived magnitude of T&nbsp;CrB in the band indicated by FILT (TG or TB).</p></dd>
 
 <dt><p>MERR</p></dt>
-<dd><p>Magnitude error, propagated from PSF fit residuals (MAD) of the target and comparison star combined in quadrature.</p></dd>
+<dd><p>Magnitude error, propagated from PSF fit residuals (MAD) of the target and comparison ensemble for the same channel, combined in quadrature.</p></dd>
 
 <dt><p>FILT</p></dt>
-<dd><p><span class="pidoc_code">TG</span> (tri-colour green, OSC green channel). Never <span class="pidoc_code">V</span> &mdash; TG and Johnson&nbsp;V differ by 0.1&ndash;0.3&nbsp;mag for red stars.</p></dd>
+<dd><p><span class="pidoc_code">TG</span> for the green-channel observation; <span class="pidoc_code">TB</span> for the blue-channel observation. Never <span class="pidoc_code">V</span> or <span class="pidoc_code">B</span> &mdash; OSC passbands differ from standard photometric filters by 0.1&ndash;0.3&nbsp;mag for red stars.</p></dd>
 
 <dt><p>TRANS</p></dt>
 <dd><p><span class="pidoc_code">NO</span> &mdash; no colour transformation applied.</p></dd>
@@ -404,13 +424,13 @@
 <dd><p>When N&nbsp;=&nbsp;1: AUID of the single comparison star (e.g. <span class="pidoc_code">000-BBW-796</span>). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">ENSEMBLE</span>. The list of ensemble star labels appears in NOTES.</p></dd>
 
 <dt><p>CMAG</p></dt>
-<dd><p>When N&nbsp;=&nbsp;1: instrumental magnitude of the comparison star (can be negative). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">na</span>. Per AAVSO spec for <span class="pidoc_code">MTYPE=STD</span> with ensemble.</p></dd>
+<dd><p>When N&nbsp;=&nbsp;1: instrumental magnitude of the comparison star in the same channel as the observation (can be negative). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">na</span>. Per AAVSO spec for <span class="pidoc_code">MTYPE=STD</span> with ensemble.</p></dd>
 
 <dt><p>KNAME</p></dt>
-<dd><p>AUID of the check star.</p></dd>
+<dd><p>AUID of the check star (same for both TG and TB lines).</p></dd>
 
 <dt><p>KMAG</p></dt>
-<dd><p>Instrumental magnitude of the check star.</p></dd>
+<dd><p>Instrumental magnitude of the check star in the same channel as the observation line.</p></dd>
 
 <dt><p>AMASS</p></dt>
 <dd><p>Airmass at mid-time (Kasten &amp; Young 1989). Written as <span class="pidoc_code">na</span> if site latitude or longitude is absent.</p></dd>
@@ -435,8 +455,11 @@
    <div id="Limitations">
 
 <dl class="pidoc_list">
-<dt><p>TG band &ne; Johnson V</p></dt>
-<dd><p>The script measures in the <strong>TG</strong> band (OSC green channel), not Johnson&nbsp;V. For red stars, TG runs ~0.1&ndash;0.3&nbsp;mag brighter than V because the OSC green passband has a different effective wavelength than the standard V filter. T&nbsp;CrB has an M3&nbsp;III companion that dominates the combined light at quiescence, making this offset significant. The AAVSO report correctly records <span class="pidoc_code">FILT=TG</span> and <span class="pidoc_code">TRANS=NO</span>. Never relabel TG measurements as V.</p></dd>
+<dt><p>TG and TB &ne; Johnson V and B</p></dt>
+<dd><p>The script measures in the <strong>TG</strong> (OSC green) and <strong>TB</strong> (OSC blue) bands, not Johnson&nbsp;V or B. OSC passbands differ from standard filter bandpasses; for red stars TG typically runs ~0.1&ndash;0.3&nbsp;mag brighter than V. The equivalent offset applies to TB vs B. T&nbsp;CrB has an M3&nbsp;III companion that dominates the combined light at quiescence, making these offsets significant. The AAVSO report correctly records <span class="pidoc_code">FILT=TG</span> and <span class="pidoc_code">FILT=TB</span> with <span class="pidoc_code">TRANS=NO</span>. Never relabel TG or TB measurements as V or B.</p></dd>
+
+<dt><p>TB&minus;TG is not a calibrated B&minus;V index</p></dt>
+<dd><p>The colour difference TB&minus;TG approximates the B&minus;V colour index qualitatively, but it carries the combined uncalibrated passband offsets of both channels. It is most useful as a relative indicator of colour change over time within a series of observations with the same equipment, not as an absolute colour index comparable to standard photometry.</p></dd>
 
 <dt><p>Single-comp fallback</p></dt>
 <dd><p>Selecting only one star in the Comp Stars step is mathematically equivalent to single-comparison-star differential photometry. The default is to use all qualifying in-frame V-band stars as an ensemble, which averages out individual comparison-star errors.</p></dd>
@@ -471,7 +494,7 @@
 </div>
 
 <div id="footer">
-   <p>AAVSO Photometry script version 1.2.1</p>
+   <p>AAVSO Photometry script version 1.3.0</p>
 </div>
 <br/>
 <br/>
