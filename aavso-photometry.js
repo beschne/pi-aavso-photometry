@@ -495,6 +495,10 @@ function sanitizeField( s ) {
    return String( s ).replace( /[,\r\n]/g, " " ).trim();
 }
 
+function escHtml( s ) {
+   return String( s ).replace( /&/g, "&amp;" ).replace( /</g, "&lt;" ).replace( />/g, "&gt;" );
+}
+
 // Parse a coordinate string and return the float value only if it is finite and
 // within [lo, hi]; otherwise return NaN so callers fall back to "na" or a warning.
 function parseCoord( s, lo, hi ) {
@@ -2156,7 +2160,7 @@ class PhotometryDialog extends Dialog {
                                   ") is > 3x MERR (" + format( "%.3f", _merr ) +
                                   ") -- possible systematic error." );
                self.checkGateLbl.text =
-                  "<b><font color='#cc6600'>⚠  Check star " + checkStar.label +
+                  "<b><font color='#cc6600'>⚠  Check star " + escHtml( checkStar.label ) +
                   ": deviation " + format( "%.3f", checkDev ) + " mag" +
                   " &gt; 3× MERR (" + format( "%.3f", _merr ) + ")<br/>" +
                   "Possible systematic error — wrong star, blending, or atmospheric gradient." +
@@ -2257,7 +2261,7 @@ class PhotometryDialog extends Dialog {
       function buildAavsoReport( midJD, amassStr, kmag, notes ) {
          var headerLines = [
             "#TYPE=EXTENDED",
-            "#OBSCODE=" + self.obscodeEdit.text,
+            "#OBSCODE=" + self.obscodeEdit.text.replace( /[\r\n]/g, "" ).trim(),
             "#SOFTWARE=" + TITLE + " v" + VERSION,
             "#DELIM=,",
             "#DATE=JD",

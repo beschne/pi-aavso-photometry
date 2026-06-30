@@ -66,13 +66,13 @@
 - [x] Check-star gate: warn if (K−C) deviation exceeds threshold before writing
 - [x] Real `MERR`: Poisson + sky-background noise (PSF MAD residuals propagated via matched-filter formula)
 
-### Security audit (needed before 1.0.0)
-- [ ] **Input validation** — validate all user-editable fields (lat/lon/elev, time fields, manual mid-time) before use; reject or clamp out-of-range values
-- [ ] **CSV content sanitisation** — star labels, AUIDs, and comments read from the CSV are written verbatim into the AAVSO report; verify no field can inject extra delimiters or newlines that corrupt the output format
-- [ ] **FITS keyword sanitisation** — values from `HISTORY`, `DATE-OBS`, site keywords are displayed in the dialog and/or written to the report; confirm they cannot inject HTML into `useRichText` labels or corrupt the report file
-- [ ] **File path handling** — stored CSV path and export path come from user input / Settings; confirm no path traversal or unintended overwrite is possible via `SaveFileDialog`
-- [ ] **No unintended network access** — confirm the script makes no outbound connections (PJSR can call `NetworkTransfer`; verify it is not used)
-- [ ] **Settings namespace isolation** — confirm `BeSchne/Photometry/…` keys cannot read or overwrite keys from other PixInsight scripts
+### Security audit (repeat before every release)
+- [x] **Input validation** — `parseCoord` validates lat/lon with range clamping; `isoToJD` validates ISO format via regex; observer code stripped of newlines before writing to report header
+- [x] **CSV content sanitisation** — AUIDs and notes pass through `sanitizeField` (strips `,\r\n`); star labels in HTML contexts pass through `escHtml` (escapes `<>&`)
+- [x] **FITS keyword sanitisation** — `detectForbiddenHistory` emits only names from a hardcoded whitelist, never raw FITS values; image ID is an internal PI identifier not a FITS value
+- [x] **File path handling** — both CSV path and export path originate from `OpenFileDialog` / `SaveFileDialog`; no path traversal possible
+- [x] **No unintended network access** — no `NetworkTransfer` calls; only a static URL string inside a `MessageBox`
+- [x] **Settings namespace isolation** — all keys under `BeSchne/Photometry/`; PJSR Settings keys are globally scoped by the full key string so there is no cross-script leakage
 
 ### PixInsight script documentation (needed before 1.0.0)
 - [x] **`#feature-info` text** — the one-paragraph description shown in `Script > Feature Scripts` should be complete and accurate (currently minimal)
