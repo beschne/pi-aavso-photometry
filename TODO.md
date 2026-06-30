@@ -88,9 +88,9 @@
 - [x] **README: outburst strategy summary** — when to switch comp/check labels and where to get a new chart (condense from `docs/domain-knowledge.md`)
 - [x] **README: known limitations** — TG ≠ V (systematic offset for red stars), Seestar FOV constraint at nova peak
 
-## Roadmap items not in scope for v1
+## Roadmap
 
-- [ ] **Full PixInsight XHTML documentation.** PI's native doc system requires a well-formed XHTML file at `<PI install>/doc/scripts/BeSchne/Photometry.html`. Users of GitHub-distributed scripts must copy it manually (no Update Repository). Wiring: `Dialog.browseScriptDocumentation("Photometry")` from the `?` help button. Contents should mirror the README getting-started guide, include screenshots, and document every dialog control formally. Defer until there is demand from other users or the script enters the PI Update Repository.
+- [x] **Full PixInsight XHTML documentation.** `docs/Photometry.html` — pidoc-format XHTML covering all five wizard steps with screenshots. Install into `<PI>/doc/scripts/BeSchne/Photometry/`; see CLAUDE.md for symlink dev workflow.
 - [x] **UI redesign — tabbed / step-oriented layout.** Implemented as a 5-step wizard (Setup → Photometry → Mid-time → Verification → Report) with a left-pane step navigator and embedded verification thumbnail. Photometry and report auto-trigger on step entry.
 - [x] **Verification image stretch controls.** No Stretch / Auto / Boosted radio buttons embedded in the Verification step; re-render on change without leaving the dialog.
 - [ ] **Recommend brighter comp/check stars when T CrB has brightened.** After photometry runs, compare `_tcrb_mag` against `TARGET.magQuiescence`. If T CrB is more than ~1 mag brighter than quiescence, the current comp/check pair is likely too faint (poor SNR, large MERR) or the magnitude difference is too large for accurate differential photometry. Show a suggestion in the Photometry step: propose the next brighter pair from the current CSV (if available), or advise the user to load a new VSP chart with a brighter magnitude range. The threshold and the suggestion text should reference the outburst strategy in `docs/domain-knowledge.md`.
