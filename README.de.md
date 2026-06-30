@@ -16,7 +16,10 @@ die sich von Ruhelage (~10 mag) bis Ausbruch (~2 mag) um ~8 Größenklassen aufh
 Das Skript nutzt die PixInsight-eigenen Werkzeuge — die astrometrische WCS-Lösung,
 FITS-Keywords und DynamicPSF — anstatt diese extern neu zu implementieren.
 
-![Dialog und Verifikationsfenster](docs/screenshot%2C%20v1.0.0%2C%20with%20verification%20window.png)
+Der Dialog ist ein fünfstufiger Assistent — Setup → Photometrie → Mittlere Zeit → Verifikation → Bericht.
+
+![Setup-Schritt](docs/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
+![Verifikationsschritt](docs/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
 
 ---
 
@@ -76,23 +79,25 @@ Falls noch kein Plate-Solve vorliegt, zuerst `Skript > Astronomie > ImageSolver`
   PixInsight registriert das Skript unter `Skript > BeSchne > Photometry` und lädt
   Codeänderungen bei jedem weiteren Start automatisch neu.
 
-### 5. Dialog ausfüllen
+### 5. Die fünf Schritte des Assistenten durchlaufen
 
-![Dialog](docs/screenshot%2C%20v1.0.0%2C%20dialog%20box%20only.png)
+**Schritt 1 — Setup**
 
 | Feld | Was tun |
 |------|---------|
 | **Aktives Bild** | Prüfen, ob der eigene Stack angezeigt wird |
 | **Vergleichs-CSV** | Zur heruntergeladenen CSV aus Schritt 2 navigieren |
-| **Comp / Check** | Für Ruhelage Standardwerte (`98` / `106`) belassen; siehe [Ausbruchsstrategie](#ausbruchsstrategie) |
+| **Comp / Check** | Die Dropdowns zeigen die zwei hellsten verwendbaren V-Band-Sterne; für Ruhelage sind diese in der Regel korrekt — siehe [Ausbruchsstrategie](#ausbruchsstrategie) |
 
-**Photometrie starten** klicken. Das Skript:
-- Passt PSFs für Ziel-, Vergleichs- und Prüfstern an (nur grüner Kanal)
-- Berechnet die TG-Helligkeit von T CrB aus der Differenz zum Vergleichsstern
-- Zeigt ein annotiertes Verifikations-Thumbnail — prüfen, ob die richtigen Sterne markiert sind
-- Warnt in Orange, wenn die Abweichung des Prüfsterns 3×MERR überschreitet
+**Schritt 2 — Photometrie**
 
-### 6. Beobachtungszeiten eintragen
+Die Photometrie startet automatisch beim Öffnen dieses Schritts:
+- PSF-Fits für Ziel-, Vergleichs- und Prüfstern (nur grüner Kanal)
+- TG-Helligkeit von T CrB aus der Differenz zum Vergleichsstern
+- Rote Warnung bei erkannten inkompatiblen Prozessen
+- Orange Warnung, wenn Prüfstern-Abweichung 3×MERR überschreitet
+
+**Schritt 3 — Mittlere Zeit**
 
 Mit den **Ordner-Schaltflächen** neben Start und Ende das erste und letzte verwendete
 Subframe referenzieren. Das Skript liest `DATE-OBS` und `EXPTIME` aus dem FITS-Header
@@ -100,11 +105,16 @@ und berechnet den Belichtungsmittelpunkt automatisch als `(Start + Ende) / 2`.
 
 **Mittlere JD**, **Luftmasse** und **Mond** auf Plausibilität prüfen.
 
-### 7. Bericht erstellen und exportieren
+**Schritt 4 — Verifikation**
 
-1. **AAVSO Extended Format** auswählen
-2. **Bericht erstellen** klicken — 15-Felder-CSV-Zeile in der Vorschau prüfen
-3. **Exportieren …** klicken — Datei mit Endung `.txt` speichern
+Annotiertes Thumbnail prüfen: Ziel (grüner Kreis), Comp (blau), Check (gelb).
+Bestätigen, dass die Kreise auf den richtigen Sternen liegen.
+
+**Schritt 5 — Bericht**
+
+Der Bericht wird automatisch beim Öffnen dieses Schritts erzeugt.
+Für die AAVSO-Einreichung **AAVSO Extended Format** wählen, dann **Exportieren …** klicken
+und mit Endung `.txt` speichern.
 
 ### 8. Bericht bei AAVSO WebObs einreichen
 
@@ -125,13 +135,13 @@ Karte **X42597QE** enthält hellere Vergleichssterne für diese Phase:
 
 | Label | AUID | V-Mag | Einsatz wenn T CrB |
 |-------|------|-------|---------------------|
-| `98`  | `000-BBW-796` | 9,809 | Ruhelage (~10 V) — **Standard** |
-| `106` | `000-BJS-901` | 10,554 | Ruhelage — **Standard-Prüfstern** |
+| `98`  | `000-BBW-796` | 9,809 | Ruhelage (~10 V) |
+| `106` | `000-BJS-901` | 10,554 | Ruhelage (Prüfstern) |
 | `84`  | `000-BBW-888` | 8,361 | Aufhellung, ~7–9 mag |
 | `79`  | `000-BBW-881` | 7,886 | Aufhellung, ~7–9 mag |
 
-**Comp**- und **Check**-Dropdown im Dialog vor „Photometrie starten" anpassen.
-Die Auswahl wird zwischen Sitzungen gespeichert.
+**Comp**- und **Check**-Dropdown im Setup-Schritt vor dem Fortfahren anpassen.
+Die Dropdowns werden bei jedem Start zurückgesetzt und schlagen die hellsten verfügbaren Sterne vor.
 
 ### Phase 2 — Nova-Maximum (~2–6 mag): neue VSP-Karte laden
 
@@ -187,7 +197,6 @@ aus echten Subframes zu setzen.
 | *Keine verwendbaren V-Band-Zeilen* | Falsche CSV oder Spaltenformat abweichend | Erneut aus AAVSO VSP exportieren und CSV-Spalten prüfen |
 | Rote Warnung: *verbotener Prozess erkannt* | Stack wurde gestretcht oder dekonvolviert | Stack aus kalibrierten Subs ohne Stretch/Schärfung neu erstellen |
 | Orange Warnung: *Prüfstern-Abweichung > 3×MERR* | Möglicher systematischer Fehler | Verifikations-Thumbnail auf falschen Stern oder Blending prüfen; Atmosphäre begutachten |
-| Verifikationsfenster nicht sichtbar | Dialog liegt im Vordergrund | Fenster erscheint auf manchen Plattformen hinter dem Dialog — im PixInsight-Arbeitsbereich nach *Verification* suchen |
 
 ---
 
@@ -222,7 +231,6 @@ TODO.md                      Aufgabenliste und Roadmap
 ## Roadmap
 
 - Vollständige native PixInsight-Dokumentation (`Skript > Feature Scripts > ?`)
-- Überarbeitetes UI mit Tabs/Schritten und eingebettetem Verifikations-Thumbnail
 - Ensemble-Photometrie (`CNAME=ENSEMBLE`)
 - TG→V-Farbtransformation (`TRANS=YES`)
 - Frei wählbarer Zielstern

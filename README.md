@@ -18,6 +18,9 @@ FITS keywords, and DynamicPSF — rather than reimplementing them externally.
 
 The dialog is a five-step wizard — Setup → Photometry → Mid-time → Verification → Report.
 
+![Setup step](docs/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
+![Verification step](docs/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
+
 ---
 
 ## Requirements
