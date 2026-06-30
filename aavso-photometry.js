@@ -1801,13 +1801,17 @@ class PhotometryDialog extends Dialog {
       this.helpBtn.flat    = true;
       this.helpBtn.toolTip = "Open script documentation";
       this.helpBtn.onClick = function() {
-         new MessageBox(
-            "<p><b>AAVSO Photometry v" + VERSION + "</b></p>" +
-            "<p>Full documentation and getting-started guide:</p>" +
-            "<p><a href='https://github.com/beschne/pi-aavso-photometry'>" +
-            "github.com/beschne/pi-aavso-photometry</a></p>",
-            TITLE, StdIcon.Information, StdButton.Ok
-         ).execute();
+         if ( !Dialog.browseScriptDocumentation( "Photometry" ) )
+            new MessageBox(
+               "<p><b>AAVSO Photometry v" + VERSION + "</b></p>" +
+               "<p>Documentation not found in the PixInsight doc tree.</p>" +
+               "<p>Install <tt>docs/Photometry.html</tt> into<br/>" +
+               "<tt>&lt;PI&gt;/doc/scripts/BeSchne/Photometry/</tt><br/>" +
+               "or visit the online guide:</p>" +
+               "<p><a href='https://github.com/beschne/pi-aavso-photometry'>" +
+               "github.com/beschne/pi-aavso-photometry</a></p>",
+               TITLE, StdIcon.Information, StdButton.Ok
+            ).execute();
       };
 
       var btnRow = new HorizontalSizer;
