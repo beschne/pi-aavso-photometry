@@ -18,8 +18,8 @@ FITS-Keywords und DynamicPSF — anstatt diese extern neu zu implementieren.
 
 Der Dialog ist ein fünfstufiger Assistent — Setup → Photometrie → Mittlere Zeit → Verifikation → Bericht.
 
-![Setup-Schritt](docs/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
-![Verifikationsschritt](docs/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
+![Setup-Schritt](screenshots/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
+![Verifikationsschritt](screenshots/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
 
 ---
 
@@ -210,18 +210,43 @@ aus echten Subframes zu setzen.
 
 ---
 
+## PixInsight-interne Dokumentation
+
+Das Skript wird mit einer nativen PixInsight-Hilfeseite ausgeliefert, die über die
+`?`-Schaltfläche im Dialog geöffnet wird.
+
+Installation:
+
+1. Ordner erstellen: `<PI-Installation>/doc/scripts/BeSchne/Photometry/`
+2. `docs/Photometry.html` in diesen Ordner kopieren
+3. Darin einen Unterordner `images/` erstellen und die Screenshots aus `screenshots/`
+   mit folgenden Namen hineinkopieren:
+
+| Quelldatei (`screenshots/`) | Zielname (`images/`) |
+|-----------------------------|----------------------|
+| `screenshot, v1.1.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.1.0, (2) photometry.png` | `photometry.png` |
+| `screenshot, v1.1.0, (3) mid-time.png` | `mid-time.png` |
+| `screenshot, v1.1.0, (5) verification.png` | `verification.png` |
+| `screenshot, v1.1.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.1.0, (6) report, aavso.png` | `report-aavso.png` |
+
+---
+
 ## Verzeichnisstruktur
 
 ```
 aavso-photometry.js          Hauptskript
 sample_comparison_stars.csv  Formatbeispiel für die Vergleichsstern-CSV
 docs/
+  Photometry.html            Native PixInsight-Hilfeseite (in PI-Dokumentationsbaum installieren)
   X42597QE_photometry.csv    AAVSO-VSP-Export für Karte X42597QE
   X42597QE.png               AAVSO-Aufsuchkarte für T CrB
   aavso-extended-format.md   AAVSO Extended File Format Feldbeschreibung
   domain-knowledge.md        Photometrie-Konstanten und wissenschaftliche Hinweise
   time-handling.md           Spezifikation der Belichtungsmittelzeit
   pjsr-api-notes.md          Verifizierte PJSR-API-Muster und Fallstricke
+screenshots/                 Dialog-Screenshots (alle Versionen)
 CLAUDE.md                    Hinweise für KI-Coding-Assistenten
 TODO.md                      Aufgabenliste und Roadmap
 ```
@@ -230,7 +255,6 @@ TODO.md                      Aufgabenliste und Roadmap
 
 ## Roadmap
 
-- Vollständige native PixInsight-Dokumentation (`Skript > Feature Scripts > ?`)
 - Ensemble-Photometrie (`CNAME=ENSEMBLE`)
 - TG→V-Farbtransformation (`TRANS=YES`)
 - Frei wählbarer Zielstern

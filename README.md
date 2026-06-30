@@ -18,8 +18,8 @@ FITS keywords, and DynamicPSF — rather than reimplementing them externally.
 
 The dialog is a five-step wizard — Setup → Photometry → Mid-time → Verification → Report.
 
-![Setup step](docs/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
-![Verification step](docs/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
+![Setup step](screenshots/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
+![Verification step](screenshots/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
 
 ---
 
@@ -211,18 +211,43 @@ records and quick review.
 
 ---
 
+## PixInsight in-app documentation
+
+The script ships with a native PixInsight HTML help page that opens via the `?` button
+in the dialog (or `Script > Feature Scripts > ?`).
+
+To install it:
+
+1. Create the folder `<PI install>/doc/scripts/BeSchne/Photometry/`
+2. Copy `docs/Photometry.html` into that folder
+3. Inside it, create an `images/` subfolder and copy the screenshots from `screenshots/`
+   with the following names:
+
+| Source file (`screenshots/`) | Install as (`images/`) |
+|------------------------------|------------------------|
+| `screenshot, v1.1.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.1.0, (2) photometry.png` | `photometry.png` |
+| `screenshot, v1.1.0, (3) mid-time.png` | `mid-time.png` |
+| `screenshot, v1.1.0, (5) verification.png` | `verification.png` |
+| `screenshot, v1.1.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.1.0, (6) report, aavso.png` | `report-aavso.png` |
+
+---
+
 ## Repository layout
 
 ```
 aavso-photometry.js          Main script
 sample_comparison_stars.csv  Format sample for the comparison-star CSV
 docs/
+  Photometry.html            Native PixInsight help page (install into PI doc tree)
   X42597QE_photometry.csv    AAVSO VSP export for chart X42597QE
   X42597QE.png               AAVSO finder chart for T CrB
   aavso-extended-format.md   AAVSO Extended File Format field spec
   domain-knowledge.md        Photometry constants and science notes
   time-handling.md           Mid-exposure time specification
   pjsr-api-notes.md          Verified PJSR API patterns and pitfalls
+screenshots/                 Dialog screenshots (all versions)
 CLAUDE.md                    AI coding-assistant guidance
 TODO.md                      Build checklist and roadmap
 ```
@@ -231,7 +256,6 @@ TODO.md                      Build checklist and roadmap
 
 ## Roadmap
 
-- Full native PixInsight documentation (`Script > Feature Scripts > ?` help)
 - Ensemble photometry (`CNAME=ENSEMBLE`)
 - TG→V colour transformation (`TRANS=YES`)
 - User-specifiable target star

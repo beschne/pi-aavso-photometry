@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+   <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+   <title>PixInsight Reference Documentation | AAVSO Photometry</title>
+   <meta name="keywords" content="photometry, variable star, differential photometry, AAVSO, T CrB, nova, PSF, TG band" />
+   <meta name="author" content="Benno Schneider" />
+   <meta name="description" content="Differential PSF photometry of variable stars inside PixInsight with AAVSO Extended Format report export." />
+   <meta name="robots" content="INDEX,FOLLOW" />
+   <meta name="pidoc-document-class" content="PIScriptDoc" />
+   <script type="text/javascript" src="../../../pidoc/scripts/pidoc-utility.js"></script>
+   <link type="text/css" href="../../../pidoc/css/pidoc-common.css" rel="stylesheet" />
+   <link type="text/css" href="../../../pidoc/css/pidoc-highlight.css" rel="stylesheet" />
+   <link type="text/css" href="../../../pidoc/css/pidoc-tool.css" rel="stylesheet" />
+   <link rel="icon" href="../../../pidoc/icons/pidoc-icon.svg" />
+</head>
+<body>
+<script type="text/javascript">
+   pidoc_generateDynamicContents();
+</script>
+
+<h1>AAVSO Photometry</h1>
+
+<div id="authors">
+<p>By Benno Schneider</p>
+</div>
+
+<hr class="separator"/>
+
+<div id="brief">
+<p>Differential PSF photometry of variable stars directly inside PixInsight, with export to the AAVSO Extended File Format for submission to <a href="https://www.aavso.org/webobs">AAVSO WebObs</a>. Preconfigured for T&nbsp;Coronae Borealis (the &ldquo;Blaze Star&rdquo;). <a href="#__contents__">[more]</a></p>
+</div>
+
+<div id="keywords">
+<p><strong>Keywords:</strong> photometry, variable star, differential photometry, AAVSO, T CrB, nova, PSF, TG band</p>
+</div>
+
+<h3 class="pidoc_sectionTitle" id="__toc__">Contents</h3>
+<p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'toc', this );">[hide]</p>
+<div id="toc">
+<ul>
+<li class="pidoc_tocItem"><a href="#__Introduction__">1&emsp;Introduction</a></li>
+<li class="pidoc_tocItem"><a href="#__Requirements__">2&emsp;Requirements</a></li>
+<li class="pidoc_tocItem"><a href="#__GettingStarted__">3&emsp;Getting Started</a>
+<ul>
+<li class="pidoc_tocSubitem"><a href="#__GettingStarted_CSV__">3.1&emsp;Download the Comparison-Star CSV</a></li>
+<li class="pidoc_tocSubitem"><a href="#__GettingStarted_Image__">3.2&emsp;Prepare the Image</a></li>
+<li class="pidoc_tocSubitem"><a href="#__GettingStarted_Run__">3.3&emsp;Run the Script</a></li>
+</ul>
+</li>
+<li class="pidoc_tocItem"><a href="#__Dialog__">4&emsp;Dialog Reference</a>
+<ul>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Setup__">4.1&emsp;Step 1 &mdash; Setup</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Photometry__">4.2&emsp;Step 2 &mdash; Photometry</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Midtime__">4.3&emsp;Step 3 &mdash; Mid-time</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Verification__">4.4&emsp;Step 4 &mdash; Verification</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Report__">4.5&emsp;Step 5 &mdash; Report</a></li>
+</ul>
+</li>
+<li class="pidoc_tocItem"><a href="#__Outburst__">5&emsp;Outburst Strategy</a></li>
+<li class="pidoc_tocItem"><a href="#__Output__">6&emsp;Output Format</a></li>
+<li class="pidoc_tocItem"><a href="#__Limitations__">7&emsp;Known Limitations</a></li>
+<li class="pidoc_tocItem"><a href="#__references__">References</a></li>
+</ul>
+</div>
+
+<div id="__contents__">
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__Introduction__">
+   <h3 class="pidoc_sectionTitle">1&emsp;Introduction</h3>
+   <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Introduction', this );">[hide]</p>
+   <div id="Introduction">
+
+<p>This script performs <em>differential PSF photometry</em> of a variable star against one or more comparison stars of known magnitude, using only the tools already present in PixInsight: the WCS astrometric solution from <a href="../../scripts/ImageSolver/ImageSolver.html">ImageSolver</a>, the Gaussian PSF fitter from <a href="../../tools/DynamicPSF/DynamicPSF.html">DynamicPSF</a>, and the FITS keywords written by the standard calibration and integration pipeline.</p>
+
+<p>The script is currently preconfigured for <strong>T&nbsp;Coronae Borealis</strong> (T&nbsp;CrB), a recurrent nova known as the &ldquo;Blaze Star&rdquo;. At quiescence T&nbsp;CrB sits near 10th magnitude; an outburst is predicted to bring it to approximately 2nd magnitude &mdash; an increase of roughly 8 magnitudes in a few days. The script measures the brightness of T&nbsp;CrB in the <strong>TG</strong> (tri-colour green) photometric band and writes the result in the <strong>AAVSO Extended File Format</strong> for direct upload to <a href="https://www.aavso.org/webobs">AAVSO WebObs</a>.</p>
+
+<p>The script works on a single <em>linear</em>, <em>plate-solved</em> OSC RGB master light stack. It measures each star by fitting a two-dimensional Gaussian PSF to the green channel, computes instrumental magnitudes from the fitted flux, and applies the standard differential photometry formula:</p>
+
+<p style="margin-left:2em;font-style:italic;">mag(T CrB) = mag_catalogue(comp) + instMag(T CrB) &minus; instMag(comp)</p>
+
+<p>A check star provides an independent quality gate: if its derived magnitude deviates from catalogue by more than 3&times;MERR, a warning is shown.</p>
+
+   </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__Requirements__">
+   <h3 class="pidoc_sectionTitle">2&emsp;Requirements</h3>
+   <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Requirements', this );">[hide]</p>
+   <div id="Requirements">
+
+<dl class="pidoc_list">
+<dt><p>PixInsight 1.9.4 &ldquo;Lockhart&rdquo; or later</p></dt>
+<dd><p>The script targets the V8 JavaScript engine introduced in PixInsight 1.9.4. Earlier releases used SpiderMonkey 24 and are not supported.</p></dd>
+
+<dt><p>Linear, plate-solved OSC RGB master light stack</p></dt>
+<dd>
+<p>The active image must satisfy the following conditions:</p>
+<ul class="pidoc_list">
+<li><strong>Linear (unstretched)</strong> &mdash; PSF flux is non-linear on a stretched image; photometry on a stretched image is meaningless.</li>
+<li><strong>Plate-solved</strong> &mdash; an astrometric WCS solution must be stored in the image (run <a href="../../scripts/ImageSolver/ImageSolver.html">ImageSolver</a> if needed).</li>
+<li><strong>RGB (three channels)</strong> &mdash; the script uses the green channel (index&nbsp;1).</li>
+</ul>
+<p>The following processes are <em>compatible</em> because they cancel in the differential magnitude calculation: background extraction (ABE, DBE, GradientCorrection) and SpectrophotometricColorCalibration (SPCC).</p>
+<p>The following processes are <em>incompatible</em> and will be flagged by the script if their names appear in the FITS HISTORY keywords: HistogramTransformation, GHSStretch, MaskedStretch, CurveTransformation, Deconvolution, BlurXTerminator, LocalHistogramEqualization, ExponentialTransformation, HDRMultiscaleTransform.</p>
+</dd>
+
+<dt><p>AAVSO VSP comparison-star CSV</p></dt>
+<dd><p>A photometry table exported from the <a href="https://www.aavso.org/vsp">AAVSO Variable Star Plotter</a> in CSV format. The script filters for V-band rows and projects each in-frame star onto the image using the plate-solve solution.</p></dd>
+</dl>
+
+   </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__GettingStarted__">
+   <h3 class="pidoc_sectionTitle">3&emsp;Getting Started</h3>
+   <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'GettingStarted', this );">[hide]</p>
+   <div id="GettingStarted">
+
+<div class="pidoc_subsection" id="__GettingStarted_CSV__">
+   <h4 class="pidoc_subsectionTitle">3.1&emsp;Download the Comparison-Star CSV</h4>
+
+<ol>
+<li>Go to the <strong>AAVSO Variable Star Plotter</strong>: <a href="https://www.aavso.org/vsp">aavso.org/vsp</a></li>
+<li>Enter target name: <strong>T CrB</strong></li>
+<li>Set <strong>Field of view</strong> to <strong>60&prime;</strong> (matches a typical small-scope or Seestar field)</li>
+<li>Set <strong>Limiting magnitude</strong> to <strong>12.0</strong></li>
+<li>Click <strong>Plot Chart</strong> and note the <strong>Chart ID</strong> (e.g. <span class="pidoc_code">X42597QE</span>)</li>
+<li>Click <strong>Photometry table</strong> &rarr; <strong>Download</strong> &rarr; save as CSV</li>
+</ol>
+
+<p>A reference copy for chart X42597QE is distributed with this script in <span class="pidoc_code">docs/X42597QE_photometry.csv</span>.</p>
+</div>
+
+<div class="pidoc_subsection" id="__GettingStarted_Image__">
+   <h4 class="pidoc_subsectionTitle">3.2&emsp;Prepare the Image</h4>
+
+<p>Open your <strong>linear, plate-solved OSC RGB master stack</strong> in PixInsight as the active window. If the stack has not yet been plate-solved, run <strong>Script &gt; Astronomy &gt; ImageSolver</strong> first.</p>
+
+<p>The script reads FITS HISTORY keywords to detect incompatible processes. These keywords are only written when the master is <em>saved to disk</em> with the &ldquo;Add FITS keywords&rdquo; preference enabled. If you applied any stretch or sharpening in-session without saving, the detection will have a blind spot; the green-channel median heuristic on the Photometry step provides a supplementary linearity check in that case.</p>
+</div>
+
+<div class="pidoc_subsection" id="__GettingStarted_Run__">
+   <h4 class="pidoc_subsectionTitle">3.3&emsp;Run the Script</h4>
+
+<ul class="pidoc_list">
+<li><strong>Quick run (no menu entry):</strong> <em>Script &gt; Execute Script File&hellip;</em> &rarr; select <span class="pidoc_code">aavso-photometry.js</span>. The script is re-read from disk on every run; no restart is required after editing.</li>
+<li><strong>With menu entry:</strong> <em>Script &gt; Feature Scripts&hellip; &gt; Add</em> the script&rsquo;s directory once. PixInsight registers it under <em>Script &gt; BeSchne &gt; Photometry</em>. Code changes are picked up automatically on the next run; only changes to the <span class="pidoc_code">#feature-id</span> registration line require a rescan or relaunch.</li>
+</ul>
+</div>
+
+   </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__Dialog__">
+   <h3 class="pidoc_sectionTitle">4&emsp;Dialog Reference</h3>
+   <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Dialog', this );">[hide]</p>
+   <div id="Dialog">
+
+<p>The script presents a five-step wizard. A narrow left pane lists the steps; clicking a step label navigates to it. The <strong>Next &rsaquo;</strong> button at the bottom right advances to the next step. Photometry (step&nbsp;2) and the Report (step&nbsp;5) are generated automatically on entry; they do not require a separate button click.</p>
+
+<div class="pidoc_subsection" id="__Dialog_Setup__">
+   <h4 class="pidoc_subsectionTitle">4.1&emsp;Step 1 &mdash; Setup</h4>
+
+<div style="text-align:center;">
+<img src="images/setup.png" alt="Setup step"/>
+</div>
+
+<dl class="pidoc_list">
+<dt><p>Active image</p></dt>
+<dd><p>Read-only display of the currently active PixInsight image window. The script operates on this image. If no image is open, or the active image is not a plate-solved RGB stack, the script aborts with a descriptive error message.</p></dd>
+
+<dt><p>Comparison CSV</p></dt>
+<dd><p>Path to the AAVSO VSP photometry CSV downloaded in section&nbsp;<a href="#__GettingStarted_CSV__">3.1</a>. The path is remembered between sessions; the script re-prompts if the file no longer exists. Click <strong>Browse&hellip;</strong> to select a different file. The script reads all V-band rows, projects each star onto the image, and discards any that fall outside the frame or are flagged as blended in the CSV comments.</p></dd>
+
+<dt><p>Comp</p></dt>
+<dd><p>The comparison star used for the differential photometry calculation. The drop-down lists all usable in-frame V-band stars sorted brightest-to-faintest. The default selection is the star whose catalogue V magnitude is closest to <em>T&nbsp;CrB at quiescence</em> (10.0&nbsp;V), which minimises differential extinction and PSF fitting error. The same star cannot be selected for both Comp and Check; choosing one automatically removes it from the other drop-down.</p></dd>
+
+<dt><p>Check</p></dt>
+<dd><p>An independent comparison star used as a quality gate. Its derived magnitude is compared to catalogue; a deviation greater than 3&times;MERR triggers an orange warning on the Photometry step. Default: the star second-closest in V magnitude to 10.0&nbsp;V.</p></dd>
+
+<dt><p>Observer code</p></dt>
+<dd><p>Your AAVSO observer code, written into the <span class="pidoc_code">#OBSCODE=</span> line of the report header. The default is <span class="pidoc_code">BSLA</span>; change it to your own code before exporting. The value is remembered between sessions.</p></dd>
+</dl>
+
+</div>
+
+<div class="pidoc_subsection" id="__Dialog_Photometry__">
+   <h4 class="pidoc_subsectionTitle">4.2&emsp;Step 2 &mdash; Photometry</h4>
+
+<div style="text-align:center;">
+<img src="images/photometry.png" alt="Photometry step"/>
+</div>
+
+<p>Photometry runs automatically when this step is entered. The panel shows the results immediately.</p>
+
+<dl class="pidoc_list">
+<dt><p>Magnitude / Filter / Error</p></dt>
+<dd><p>The derived magnitude of T&nbsp;CrB in the TG band, the filter label (<strong>TG</strong>), and the magnitude error MERR. MERR is propagated from the PSF fit residuals of both the target and the comparison star, combined in quadrature using a matched-filter formula.</p></dd>
+
+<dt><p>Raw PSF flux (instrumental magnitudes)</p></dt>
+<dd><p>The instrumental magnitudes &minus;2.5&nbsp;log<sub>10</sub>(flux) for the target (T&nbsp;CrB), the comparison star (Comp), and the check star (Check), with their AAVSO chart labels. These are the raw values before the catalogue offset is applied. Negative instrumental magnitudes are normal for bright stars.</p></dd>
+
+<dt><p>Comparison star / Check star</p></dt>
+<dd><p>The AAVSO chart label and catalogue V magnitude of the selected Comp and Check stars.</p></dd>
+
+<dt><p>Linearity warning (yellow / orange)</p></dt>
+<dd><p>A supplementary heuristic checks the green-channel median of the active image. A linear master typically has a median below 0.05 (normalised). Values between 0.05 and 0.15 trigger a yellow advisory; values above 0.15 trigger an orange warning suggesting the image may be stretched. This is a heuristic only and does not block the report.</p></dd>
+
+<dt><p>Forbidden-process warning (red)</p></dt>
+<dd><p>If a FITS HISTORY keyword contains the name of an incompatible process (stretch, deconvolution, BlurXTerminator, &hellip;), a red label lists the offending process names. This check is limited to processes recorded in the FITS keywords; see <a href="#__Requirements__">Requirements</a> for the known blind spot.</p></dd>
+
+<dt><p>Check-star gate (orange)</p></dt>
+<dd><p>If the check star&rsquo;s derived magnitude deviates from its catalogue V by more than 3&times;MERR, an orange label reports the deviation. This suggests a systematic problem such as a wrong star, blending, or poor atmospheric conditions. The report can still be exported, but the observation should be scrutinised before submission.</p></dd>
+</dl>
+
+</div>
+
+<div class="pidoc_subsection" id="__Dialog_Midtime__">
+   <h4 class="pidoc_subsectionTitle">4.3&emsp;Step 3 &mdash; Mid-time</h4>
+
+<div style="text-align:center;">
+<img src="images/mid-time.png" alt="Mid-time step"/>
+</div>
+
+<p>This step establishes the observation timestamp written as <span class="pidoc_code">DATE</span> (mid-exposure JD) in the AAVSO report and used to compute airmass.</p>
+
+<dl class="pidoc_list">
+<dt><p>Start / End (reference-file buttons)</p></dt>
+<dd><p>Click the folder buttons to select FITS or XISF subframe files. The script reads <span class="pidoc_code">DATE-OBS</span> and <span class="pidoc_code">EXPTIME</span> from each file&rsquo;s header. Select the <em>first surviving subframe</em> for Start and the <em>last surviving subframe</em> for End. End is computed as the last sub&rsquo;s <span class="pidoc_code">DATE-OBS + EXPTIME</span>. Both fields are also directly editable in UTC&nbsp;ISO-8601 format.</p>
+<p><strong>Note:</strong> Do not rely on the master stack&rsquo;s own <span class="pidoc_code">DATE-OBS</span> keyword for the session span. PixInsight&rsquo;s ImageIntegration writes the midpoint of sub <em>start</em> times, ignoring exposure duration, which gives a systematically early result.</p></dd>
+
+<dt><p>Mid-time</p></dt>
+<dd>
+<p>Three modes, selectable by radio button:</p>
+<ul class="pidoc_list">
+<li><strong>(Start+End)/2</strong> (default, recommended) &mdash; arithmetic midpoint of the session span.</li>
+<li><strong>= Start</strong> &mdash; use the start of the first subframe. Appropriate for very short or single-frame sessions.</li>
+<li><strong>Manual</strong> &mdash; type an arbitrary UTC ISO-8601 time into the edit field.</li>
+</ul>
+<p>The resulting mid-time JD and its ISO-8601 equivalent are shown as read-only readouts.</p>
+</dd>
+
+<dt><p>Lat / Lon / Elev</p></dt>
+<dd><p>Observer site coordinates, pre-filled from FITS keywords (<span class="pidoc_code">SITELAT</span>, <span class="pidoc_code">SITELONG</span>, <span class="pidoc_code">SITEELEV</span> and synonyms). All three fields are editable. Longitude is degrees East-positive. Elevation defaults to 0&nbsp;m if absent. If Lat or Lon remain blank, the report writes <span class="pidoc_code">AMASS=na</span>, which is valid per the AAVSO Extended File Format specification.</p></dd>
+
+<dt><p>Airmass</p></dt>
+<dd><p>Computed using the Kasten &amp; Young (1989) formula from the confirmed mid-time JD, the observer site coordinates, and T&nbsp;CrB&rsquo;s J2000 position. Shown as a read-only readout; written as <span class="pidoc_code">AMASS</span> in the report.</p></dd>
+
+<dt><p>Moon</p></dt>
+<dd><p>Approximate lunar phase (percentage illumination) and angular separation from T&nbsp;CrB at the mid-time, shown as a sanity check. Not written to the report.</p></dd>
+</dl>
+
+</div>
+
+<div class="pidoc_subsection" id="__Dialog_Verification__">
+   <h4 class="pidoc_subsectionTitle">4.4&emsp;Step 4 &mdash; Verification</h4>
+
+<div style="text-align:center;">
+<img src="images/verification.png" alt="Verification step"/>
+</div>
+
+<p>This step displays an annotated thumbnail of the image centred on T&nbsp;CrB. Confirm that the coloured circles land on the correct stars before exporting the report.</p>
+
+<dl class="pidoc_list">
+<dt><p>Annotation circles</p></dt>
+<dd>
+<ul class="pidoc_list">
+<li><strong>Green</strong> &mdash; T&nbsp;CrB (the target)</li>
+<li><strong>Blue</strong> &mdash; comparison star (Comp)</li>
+<li><strong>Yellow</strong> &mdash; check star (Check)</li>
+</ul>
+</dd>
+
+<dt><p>Stretch</p></dt>
+<dd>
+<p>Three display modes for the thumbnail:</p>
+<ul class="pidoc_list">
+<li><strong>No stretch</strong> &mdash; raw linear values; very faint appearance for a typical deep-sky master.</li>
+<li><strong>Auto stretch</strong> &mdash; midtone transfer function matched to the image median; stars are clearly visible.</li>
+<li><strong>Boosted</strong> &mdash; aggressive stretch that brings out faint stars; useful for confirming the check star position.</li>
+</ul>
+<p>Changing the stretch re-renders the thumbnail without leaving the dialog. The stretch applied here does not affect the photometry; measurements were already computed in step&nbsp;2.</p>
+</dd>
+</dl>
+
+</div>
+
+<div class="pidoc_subsection" id="__Dialog_Report__">
+   <h4 class="pidoc_subsectionTitle">4.5&emsp;Step 5 &mdash; Report</h4>
+
+<div style="text-align:center;">
+<img src="images/report-human.png" alt="Report step — human-readable format"/>
+</div>
+
+<p>The report is generated automatically when this step is entered.</p>
+
+<dl class="pidoc_list">
+<dt><p>Human-readable format (default)</p></dt>
+<dd><p>A formatted text summary of the observation: target, magnitude, filter, time, airmass, comp/check details, and a brief quality summary. Suitable for personal records or quick review.</p></dd>
+
+<dt><p>AAVSO Extended Format</p></dt>
+<dd>
+<div style="text-align:center;">
+<img src="images/report-aavso.png" alt="Report step — AAVSO Extended Format"/>
+</div>
+<p>A 15-field comma-delimited CSV observation line preceded by the required AAVSO file header. This format is ready for direct upload to <a href="https://www.aavso.org/webobs">AAVSO WebObs</a>. See section&nbsp;<a href="#__Output__">6</a> for field details.</p>
+</dd>
+
+<dt><p>Export&hellip;</p></dt>
+<dd><p>Opens a save-file dialog. Save with a <span class="pidoc_code">.txt</span> extension for AAVSO WebObs compatibility. The file is written immediately; the dialog preview is a live view of what will be saved.</p></dd>
+</dl>
+
+   </div>
+</div>
+
+   </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__Outburst__">
+   <h3 class="pidoc_sectionTitle">5&emsp;Outburst Strategy</h3>
+   <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Outburst', this );">[hide]</p>
+   <div id="Outburst">
+
+<p>T&nbsp;CrB is expected to brighten by approximately 8 magnitudes from quiescence (~10&nbsp;V) to nova peak (~2&nbsp;V). As the target brightens the optimal comparison stars change.</p>
+
+<p><strong>Early brightening (~7&ndash;9&nbsp;mag):</strong> Chart X42597QE contains brighter comparison stars. Change the <strong>Comp</strong> and <strong>Check</strong> drop-downs in the Setup step before running:</p>
+
+<table>
+<tr><th>Label</th><th>AUID</th><th>V mag</th><th>Use when T CrB is near</th></tr>
+<tr><td><span class="pidoc_code">98</span></td><td>000-BBW-796</td><td>9.809</td><td>Quiescence (~10&nbsp;V)</td></tr>
+<tr><td><span class="pidoc_code">106</span></td><td>000-BJS-901</td><td>10.554</td><td>Quiescence (check star)</td></tr>
+<tr><td><span class="pidoc_code">84</span></td><td>000-BBW-888</td><td>8.361</td><td>Brightening, ~7&ndash;9&nbsp;mag</td></tr>
+<tr><td><span class="pidoc_code">79</span></td><td>000-BBW-881</td><td>7.886</td><td>Brightening, ~7&ndash;9&nbsp;mag</td></tr>
+</table>
+
+<p><strong>Nova peak (~2&ndash;6&nbsp;mag):</strong> The comparison stars in X42597QE will be too faint relative to T&nbsp;CrB, and the star itself will saturate normal exposures. A new AAVSO VSP chart with a wider field (180&prime;) and brighter magnitude limit (5&ndash;6) is required. AAVSO issues Alert Notices with specific chart and exposure guidance when the outburst begins; monitor <a href="https://www.aavso.org/news">aavso.org/news</a>.</p>
+
+   </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__Output__">
+   <h3 class="pidoc_sectionTitle">6&emsp;Output Format</h3>
+   <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Output', this );">[hide]</p>
+   <div id="Output">
+
+<p>The AAVSO Extended File Format report consists of a file header followed by one observation line.</p>
+
+<p><strong>File header:</strong></p>
+<pre>
+#TYPE=EXTENDED
+#OBSCODE=&lt;observer code&gt;
+#SOFTWARE=AAVSO Photometry 1.1.0
+#DELIM=,
+#DATE=JD
+#OBSTYPE=CCD
+</pre>
+
+<p><strong>Observation fields</strong> (15 comma-delimited fields):</p>
+
+<dl class="pidoc_list">
+<dt><p>NAME</p></dt>
+<dd><p>Target identifier: <span class="pidoc_code">T CRB</span>.</p></dd>
+
+<dt><p>DATE</p></dt>
+<dd><p>Mid-exposure Julian Date (JD), as confirmed in step&nbsp;3.</p></dd>
+
+<dt><p>MAG</p></dt>
+<dd><p>Derived TG magnitude of T&nbsp;CrB.</p></dd>
+
+<dt><p>MERR</p></dt>
+<dd><p>Magnitude error, propagated from PSF fit residuals (MAD) of the target and comparison star combined in quadrature.</p></dd>
+
+<dt><p>FILT</p></dt>
+<dd><p><span class="pidoc_code">TG</span> (tri-colour green, OSC green channel). Never <span class="pidoc_code">V</span> &mdash; TG and Johnson&nbsp;V differ by 0.1&ndash;0.3&nbsp;mag for red stars.</p></dd>
+
+<dt><p>TRANS</p></dt>
+<dd><p><span class="pidoc_code">NO</span> &mdash; no colour transformation applied.</p></dd>
+
+<dt><p>MTYPE</p></dt>
+<dd><p><span class="pidoc_code">STD</span> &mdash; standard (not differential) magnitude output.</p></dd>
+
+<dt><p>CNAME</p></dt>
+<dd><p>AUID of the comparison star (e.g. <span class="pidoc_code">000-BBW-796</span>), or chart label if no AUID is available.</p></dd>
+
+<dt><p>CMAG</p></dt>
+<dd><p>Instrumental magnitude of the comparison star (can be negative). Per AAVSO spec for <span class="pidoc_code">MTYPE=STD</span>.</p></dd>
+
+<dt><p>KNAME</p></dt>
+<dd><p>AUID of the check star.</p></dd>
+
+<dt><p>KMAG</p></dt>
+<dd><p>Instrumental magnitude of the check star.</p></dd>
+
+<dt><p>AMASS</p></dt>
+<dd><p>Airmass at mid-time (Kasten &amp; Young 1989). Written as <span class="pidoc_code">na</span> if site latitude or longitude is absent.</p></dd>
+
+<dt><p>GROUP</p></dt>
+<dd><p><span class="pidoc_code">na</span>.</p></dd>
+
+<dt><p>CHART</p></dt>
+<dd><p>AAVSO VSP chart ID (e.g. <span class="pidoc_code">X42597QE</span>).</p></dd>
+
+<dt><p>NOTES</p></dt>
+<dd><p>Script name and version.</p></dd>
+</dl>
+
+   </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__Limitations__">
+   <h3 class="pidoc_sectionTitle">7&emsp;Known Limitations</h3>
+   <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Limitations', this );">[hide]</p>
+   <div id="Limitations">
+
+<dl class="pidoc_list">
+<dt><p>TG band &ne; Johnson V</p></dt>
+<dd><p>The script measures in the <strong>TG</strong> band (OSC green channel), not Johnson&nbsp;V. For red stars, TG runs ~0.1&ndash;0.3&nbsp;mag brighter than V because the OSC green passband has a different effective wavelength than the standard V filter. T&nbsp;CrB has an M3&nbsp;III companion that dominates the combined light at quiescence, making this offset significant. The AAVSO report correctly records <span class="pidoc_code">FILT=TG</span> and <span class="pidoc_code">TRANS=NO</span>. Never relabel TG measurements as V.</p></dd>
+
+<dt><p>Single comparison star</p></dt>
+<dd><p>The current version uses one comparison star and one check star. Ensemble photometry (multiple comparison stars averaged) is planned for a future release. With a single comp star, any variability or measurement error in that star propagates directly into the T&nbsp;CrB magnitude.</p></dd>
+
+<dt><p>DATE-OBS unreliable in stacked masters</p></dt>
+<dd><p>PixInsight&rsquo;s ImageIntegration writes <span class="pidoc_code">DATE-OBS</span> as the midpoint of sub <em>start</em> times, ignoring exposure duration. This gives a systematically early result. Always use the reference-file buttons in the Mid-time step to set Start and End from actual subframes.</p></dd>
+
+<dt><p>In-memory stretch detection blind spot</p></dt>
+<dd><p>FITS HISTORY keywords are only written when a file is saved to disk. A stretch or deconvolution applied to an in-memory ImageIntegration result in the current session, without an intermediate save, will not appear in the keywords and will not be detected. The green-channel median heuristic on the Photometry step provides a supplementary check.</p></dd>
+
+<dt><p>FOV constraint at nova peak</p></dt>
+<dd><p>At maximum brightness T&nbsp;CrB will saturate any normal exposure, and the faint comparison stars in chart X42597QE may be undetectable. A wider-field instrument and a new AAVSO VSP chart with brighter comp stars will be required. See section&nbsp;<a href="#__Outburst__">5</a>.</p></dd>
+</dl>
+
+   </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="pidoc_section" id="__references__">
+   <h3 class="pidoc_sectionTitle">References</h3>
+   <div id="references">
+      <p id="__reference_1__"><strong>[1]</strong> F. Kasten, A. T. Young (1989) <em>Revised optical air mass tables and approximation formula</em>, Applied Optics, 28, 4735&ndash;4738</p>
+      <p id="__reference_2__"><strong>[2]</strong> AAVSO (2023) <em><a href="https://www.aavso.org/aavso-extended-file-format">AAVSO Extended File Format</a></em>, American Association of Variable Star Observers</p>
+      <p id="__reference_3__"><strong>[3]</strong> E. W. Greisen, M. R. Calabretta (2002) <em><a href="https://fits.gsfc.nasa.gov/fits_wcs.html">Representations of World Coordinates in FITS</a></em>, Astronomy &amp; Astrophysics, 395, 1061&ndash;1075</p>
+   </div>
+</div>
+
+<hr class="separator"/>
+
+<div id="copyright">
+   <p>Copyright &copy; 2026, Benno Schneider</p>
+</div>
+
+<div id="footer">
+   <p>AAVSO Photometry script version 1.1.0</p>
+</div>
+<br/>
+<br/>
+
+</div> <!-- contents -->
+
+</body>
+</html>

@@ -38,8 +38,10 @@ them externally.
 | ---- | ------- |
 | `aavso-photometry.js` | The script. Runs on the active image window; locates T CrB via the plate solve; measures it against CSV comparison stars; writes an AAVSO Extended report. |
 | `sample_comparison_stars.csv` | Format sample for the comparison-star CSV (two stars, multiple bands). |
+| `docs/Photometry.html` | Native PixInsight help page — see **PixInsight documentation** below for install instructions. |
 | `docs/X42597QE_photometry.csv` | Reference copy of the AAVSO VSP export for chart X42597QE. |
 | `docs/X42597QE.png` | AAVSO finder chart for T CrB, chart X42597QE. |
+| `screenshots/` | Dialog screenshots for all versions, used in the READMEs and PI docs. |
 
 ## Running and development
 
@@ -56,6 +58,32 @@ menu. Edits to the code body are picked up on the next run; only changes to the
 
 **Do NOT** use the Update Repository → Exit → Install → Restart cycle during
 development. That mechanism is only for distributing the finished script to other machines.
+
+## PixInsight documentation
+
+`docs/Photometry.html` is the native PixInsight help page, opened by `Dialog.browseScriptDocumentation("Photometry")` (the `?` button). It must be installed manually into the PI doc tree; there is no Update Repository mechanism for GitHub-distributed scripts.
+
+**Install path:** `<PI install>/doc/scripts/BeSchne/Photometry/Photometry.html`
+
+**Images** go in `<PI install>/doc/scripts/BeSchne/Photometry/images/`, renamed as follows:
+
+| Source (`screenshots/`) | Install as (`images/`) |
+|-------------------------|------------------------|
+| `screenshot, v1.1.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.1.0, (2) photometry.png` | `photometry.png` |
+| `screenshot, v1.1.0, (3) mid-time.png` | `mid-time.png` |
+| `screenshot, v1.1.0, (5) verification.png` | `verification.png` |
+| `screenshot, v1.1.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.1.0, (6) report, aavso.png` | `report-aavso.png` |
+
+**pidoc path depth:** the HTML references `../../../pidoc/` for CSS/JS (three levels up from `Photometry/` to `doc/`). Do not change this when editing the file.
+
+**Testing without installing:** symlink the file into the PI doc tree so edits are picked up live:
+```bash
+mkdir -p /Applications/PixInsight/doc/scripts/BeSchne/Photometry
+ln -s "$(pwd)/docs/Photometry.html" /Applications/PixInsight/doc/scripts/BeSchne/Photometry/Photometry.html
+```
+Copy or symlink the `images/` folder alongside it (see table above for filenames). Then `Dialog.browseScriptDocumentation("Photometry")` opens the live file. Delete the symlink when done.
 
 ## Input image preconditions
 
