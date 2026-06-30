@@ -16,10 +16,10 @@ die sich von Ruhelage (~10 mag) bis Ausbruch (~2 mag) um ~8 Größenklassen aufh
 Das Skript nutzt die PixInsight-eigenen Werkzeuge — die astrometrische WCS-Lösung,
 FITS-Keywords und DynamicPSF — anstatt diese extern neu zu implementieren.
 
-Der Dialog ist ein fünfstufiger Assistent — Setup → Photometrie → Mittlere Zeit → Verifikation → Bericht.
+Der Dialog ist ein sechsstufiger Assistent — Setup → Vergleichssterne → Photometrie → Mittlere Zeit → Verifikation → Bericht.
 
-![Setup-Schritt](screenshots/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
-![Verifikationsschritt](screenshots/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
+![Setup-Schritt](screenshots/screenshot%2C%20v1.2.0%2C%20%281%29%20setup.png)
+![Vergleichssterne-Schritt](screenshots/screenshot%2C%20v1.2.0%2C%20%282%29%20comp%20stars.png)
 
 ---
 
@@ -79,7 +79,7 @@ Falls noch kein Plate-Solve vorliegt, zuerst `Skript > Astronomie > ImageSolver`
   PixInsight registriert das Skript unter `Skript > BeSchne > Photometry` und lädt
   Codeänderungen bei jedem weiteren Start automatisch neu.
 
-### 5. Die fünf Schritte des Assistenten durchlaufen
+### 5. Die sechs Schritte des Assistenten durchlaufen
 
 **Schritt 1 — Setup**
 
@@ -87,17 +87,25 @@ Falls noch kein Plate-Solve vorliegt, zuerst `Skript > Astronomie > ImageSolver`
 |------|---------|
 | **Aktives Bild** | Prüfen, ob der eigene Stack angezeigt wird |
 | **Vergleichs-CSV** | Zur heruntergeladenen CSV aus Schritt 2 navigieren |
-| **Comp / Check** | Die Dropdowns zeigen die zwei hellsten verwendbaren V-Band-Sterne; für Ruhelage sind diese in der Regel korrekt — siehe [Ausbruchsstrategie](#ausbruchsstrategie) |
+| **Beobachtercode** | Den eigenen AAVSO-Beobachtercode eingeben |
 
-**Schritt 2 — Photometrie**
+**Schritt 2 — Vergleichssterne**
+
+Das Skript führt einen PSF-Entdeckungsdurchlauf für alle feldintern sichtbaren V-Band-Sterne
+durch und zeigt sie in einer Tabelle mit V-Helligkeit, Δmag zum Ziel und PSF-Qualität.
+Sterne, die Qualitätsprüfungen bestehen und innerhalb von 2 Größenklassen des Ziels liegen,
+werden automatisch für das Ensemble ausgewählt. Auf eine Zeile klicken, um sie ein- oder
+auszuschalten. Den **Prüfstern** aus dem Dropdown am unteren Rand wählen.
+
+**Schritt 3 — Photometrie**
 
 Die Photometrie startet automatisch beim Öffnen dieses Schritts:
-- PSF-Fits für Ziel-, Vergleichs- und Prüfstern (nur grüner Kanal)
-- TG-Helligkeit von T CrB aus der Differenz zum Vergleichsstern
-- Rote Warnung bei erkannten inkompatiblen Prozessen
+- **Helligkeit** (TG-Band), **Filter: TG**, **Fehler (MERR)**
+- **Rohe PSF-Flüsse** — Instrumentalhelligkeiten für Ziel, Comp-Ensemble und Prüfstern
+- Rote Warnung bei erkannten inkompatiblen Prozessen in der Bildhistorie
 - Orange Warnung, wenn Prüfstern-Abweichung 3×MERR überschreitet
 
-**Schritt 3 — Mittlere Zeit**
+**Schritt 4 — Mittlere Zeit**
 
 Mit den **Ordner-Schaltflächen** neben Start und Ende das erste und letzte verwendete
 Subframe referenzieren. Das Skript liest `DATE-OBS` und `EXPTIME` aus dem FITS-Header
@@ -105,12 +113,13 @@ und berechnet den Belichtungsmittelpunkt automatisch als `(Start + Ende) / 2`.
 
 **Mittlere JD**, **Luftmasse** und **Mond** auf Plausibilität prüfen.
 
-**Schritt 4 — Verifikation**
+**Schritt 5 — Verifikation**
 
-Annotiertes Thumbnail prüfen: Ziel (grüner Kreis), Comp (blau), Check (gelb).
-Bestätigen, dass die Kreise auf den richtigen Sternen liegen.
+Annotiertes Thumbnail prüfen: Ziel (grüner Kreis), Comp-Sterne (blau), Check (gelb).
+Bestätigen, dass die Kreise auf den richtigen Sternen liegen. Die Stretch-Schaltflächen
+verwenden, um schwache Sterne besser sichtbar zu machen.
 
-**Schritt 5 — Bericht**
+**Schritt 6 — Bericht**
 
 Der Bericht wird automatisch beim Öffnen dieses Schritts erzeugt.
 Für die AAVSO-Einreichung **AAVSO Extended Format** wählen, dann **Exportieren …** klicken
@@ -141,8 +150,8 @@ Karte **X42597QE** enthält hellere Vergleichssterne für diese Phase:
 | `84`  | `000-BBW-888` | 8,361 | Aufhellung, ~7–9 mag |
 | `79`  | `000-BBW-881` | 7,886 | Aufhellung, ~7–9 mag |
 
-**Comp**- und **Check**-Dropdown im Setup-Schritt vor dem Fortfahren anpassen.
-Die Dropdowns werden bei jedem Start zurückgesetzt und schlagen die hellsten verfügbaren Sterne vor.
+Im **Schritt 2 — Vergleichssterne** die Auswahl entsprechend anpassen.
+Das Skript schlägt automatisch die hellsten qualitativ geeigneten Sterne vor.
 
 ### Phase 2 — Nova-Maximum (~2–6 mag): neue VSP-Karte laden
 
@@ -174,9 +183,9 @@ M3-III-Begleiter hat, der in Ruhelage dominiert. Der AAVSO-Bericht enthält korr
 Weitwinkelinstrument, visuelle Beobachtung oder Ensemble-Photometrie mit schwächeren
 feldinternen Sternen (geplante Funktion).
 
-**Einzelner Vergleichsstern.** Die aktuelle Version verwendet einen Vergleichs- und
-einen Prüfstern. Ensemble-Photometrie (mehrere Vergleichssterne) ist als Post-v1-Feature
-geplant und reduziert die Empfindlichkeit gegenüber Variabilität einzelner Sterne.
+**Ensemble-Photometrie.** Das Skript verwendet standardmäßig mehrere Vergleichssterne
+(Ensemble). Im Schritt 2 einzelne Sterne per Klick ein- oder ausschalten. Wird nur ein
+Stern ausgewählt, entspricht das mathematisch der klassischen Einzelstern-Differenzphotometrie.
 
 **DATE-OBS bei gestackten Mastern unzuverlässig.** PixInsights `ImageIntegration`
 schreibt `DATE-OBS` als Mittelpunkt der Sub-Startzeiten ohne Belichtungsdauer.
@@ -225,12 +234,13 @@ Installation:
 
 | Quelldatei (`screenshots/`) | Zielname (`images/`) |
 |-----------------------------|----------------------|
-| `screenshot, v1.1.0, (1) setup.png` | `setup.png` |
-| `screenshot, v1.1.0, (2) photometry.png` | `photometry.png` |
-| `screenshot, v1.1.0, (3) mid-time.png` | `mid-time.png` |
-| `screenshot, v1.1.0, (5) verification.png` | `verification.png` |
-| `screenshot, v1.1.0, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v1.1.0, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v1.2.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.2.0, (2) comp stars.png` | `comp-stars.png` |
+| `screenshot, v1.2.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v1.2.0, (4) mid-time.png` | `mid-time.png` |
+| `screenshot, v1.2.0, (5) verification.png` | `verification.png` |
+| `screenshot, v1.2.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.2.0, (6) report, aavso.png` | `report-aavso.png` |
 
 ---
 
@@ -256,9 +266,9 @@ TODO.md                      Aufgabenliste und Roadmap
 
 ## Roadmap
 
-- Ensemble-Photometrie (`CNAME=ENSEMBLE`)
-- TG→V-Farbtransformation (`TRANS=YES`)
+- Mehrband-Photometrie TB/TG (blauer Kanal)
 - Frei wählbarer Zielstern
+- TG→V-Farbtransformation (`TRANS=YES`)
 
 ---
 

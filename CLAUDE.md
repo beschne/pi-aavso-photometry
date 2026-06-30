@@ -69,12 +69,13 @@ development. That mechanism is only for distributing the finished script to othe
 
 | Source (`screenshots/`) | Install as (`images/`) |
 |-------------------------|------------------------|
-| `screenshot, v1.1.0, (1) setup.png` | `setup.png` |
-| `screenshot, v1.1.0, (2) photometry.png` | `photometry.png` |
-| `screenshot, v1.1.0, (3) mid-time.png` | `mid-time.png` |
-| `screenshot, v1.1.0, (5) verification.png` | `verification.png` |
-| `screenshot, v1.1.0, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v1.1.0, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v1.2.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.2.0, (2) comp stars.png` | `comp-stars.png` |
+| `screenshot, v1.2.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v1.2.0, (4) mid-time.png` | `mid-time.png` |
+| `screenshot, v1.2.0, (5) verification.png` | `verification.png` |
+| `screenshot, v1.2.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.2.0, (6) report, aavso.png` | `report-aavso.png` |
 
 **pidoc path depth:** the HTML references `../../../pidoc/` for CSS/JS (three levels up from `Photometry/` to `doc/`). Do not change this when editing the file.
 
@@ -136,7 +137,7 @@ These are enforced by the dialog's notice text and must be respected in all code
 4. **Target location:** T CrB catalog position hardcoded → project to pixels via the plate solve.
 5. **Comparison stars:** read from a user-chosen CSV (path persisted via `Settings`); project each in-frame star to pixels.
 6. **Measurement:** PSF fit via native **DynamicPSF**; read amplitude / background / sigma / flux. Apply quality filters (too faint, saturated/clipped, centroid drift) — see `docs/domain-knowledge.md`.
-7. **Photometry (current scope):** single comp star + single check star. Derive T CrB magnitude from comp's known V mag and the instrumental difference. `MERR` is computed from PSF fit residuals (see `docs/domain-knowledge.md`). The check star is a separate quality gate — its derived magnitude is compared to catalogue V; a >3×MERR deviation triggers a console warning.
+7. **Photometry (current scope):** ensemble comp stars (N selectable in Comp Stars step) + single check star. Zero-point ZP = mean(magV_i − instMag_i); mag(T) = ZP + instMag_T. `MERR` = √(σ_ZP² + σ_T²) where σ_ZP = std(ZP_i)/√N for N≥2 (see `docs/domain-knowledge.md`). The check star is a separate quality gate — its derived magnitude is compared to catalogue V; a >3×MERR deviation triggers a warning.
 8. **Time confirmation (UI):** time fields (Start / End / Mid) are in the Mid-time step of `PhotometryDialog` — see `docs/time-handling.md` and **Dialog layout** below. Confirmed mid-time JD drives the AAVSO `DATE` field and airmass.
 9. **Output:** navigating to the Report step auto-generates the report (human-readable by default; AAVSO Extended CSV on demand); "Export…" opens a `SaveFileDialog` and writes the file immediately — see `docs/aavso-extended-format.md`.
 
@@ -210,28 +211,31 @@ Full specification: `docs/time-handling.md`.
 
 ## Dialog layout
 
-Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). The layout is a **five-step wizard**: a narrow left pane of step-navigator `Control` items, a vertical separator, and a right pane that shows one panel at a time.
+Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). The layout is a **six-step wizard**: a narrow left pane of step-navigator `Control` items, a vertical separator, and a right pane that shows one panel at a time.
 
 **Left pane** — step navigator
-- Five custom `Control` items (not `PushButton`). Each draws its label left-aligned in `onPaint` (bold = current step; grey = disabled). `onMousePress` calls `activateStep(idx)`.
+- Six custom `Control` items (not `PushButton`). Each draws its label left-aligned in `onPaint` (bold = current step; grey = disabled). `onMousePress` calls `activateStep(idx)`.
 - A flat `ToolButton` (help icon) sits at the bottom. No Close button — use the window's own.
 - `setMinSize(110, 18)`, sizer spacing = 0, to match normal text line rhythm.
 
 **Step enablement** (`isStepEnabled`):
-- Steps 0, 1, 2 always enabled.
-- Step 3 (Verification): requires `_photDone`.
-- Step 4 (Report): requires `_photDone && !isNaN(self.midJD)`.
+- Steps 0 (Setup) and 1 (Comp Stars) always enabled.
+- Step 2 (Photometry): requires `_discoveryDone && _ensembleEntries.length > 0`.
+- Steps 3 (Mid-time) and 4 (Verification): require `_photDone`.
+- Step 5 (Report): requires `_photDone && !isNaN(self.midJD)`.
 
 **Auto-triggers in `activateStep`:**
-- Entering step 1 → runs `runPhotometry()` (wrapped in try/catch).
-- Entering step 4 → runs `generateReport()`.
+- Entering step 1 → runs `runDiscovery()` (single DynamicPSF pass for all candidates).
+- Entering step 2 → runs `runPhotometry()` (uses cached PSF from discovery).
+- Entering step 5 → runs `generateReport()`.
 
 | Step | Panel | Contents |
 |------|-------|----------|
-| **1 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); CSV path + Browse; **Comp** and **Check** ComboBoxes (non-blended V-band stars, sorted brightest-first; always defaults to index 0/1 from CSV on each run — not persisted); **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
-| **2 — Photometry** | `runPanel` | Magnitude + Filter TG + Error (MERR); Raw PSF flux row (T/Comp/Check instrumental mags with star labels); Comparison star + Check star labels/V mags; `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation) |
+| **0 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); CSV path + Browse; **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
+| **1 — Comp Stars** | `compStarsPanel` | TreeBox (5 cols: ✓, Label, AUID, V mag, Δmag, Quality) listing all in-frame V-band candidates; **Check** ComboBox at bottom; `updateCompCount()` label |
+| **2 — Photometry** | `runPanel` | Magnitude + Filter TG + Error (MERR); Raw PSF flux row (T/ensemble/check instrumental mags); `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation) |
 | **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
-| **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = green circle, comp = blue, check = yellow); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
+| **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = green circle, comp stars = blue, check = yellow); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
 | **5 — Report** | `reportPanel` | Format RadioButtons (Human readable default, AAVSO Extended); scrollable read-only `TextBox` preview; Export button (opens `SaveFileDialog`, writes immediately) |
 
 **RadioButton grouping:** three independent exclusive groups, each with a different parent to avoid Qt's per-parent exclusion colliding across groups:
@@ -254,13 +258,13 @@ Keep code structured so these are additions, not rewrites. In priority order:
 - ~~**Annotated verification image.**~~ Done: embedded thumbnail in step 4 with No/Auto/Boosted stretch controls.
 - ~~**Check-star gate.**~~ Done: deviation > 3×MERR triggers orange warning in Photometry step and console.
 - ~~**Real `MERR`.**~~ Done: PSF MAD residuals propagated via matched-filter formula; target + comp combined in quadrature.
+- ~~**Ensemble photometry.**~~ Done (v1.2.0): six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars TreeBox; single DynamicPSF discovery pass; ZP = mean(magV_i − instMag_i); `CNAME=ENSEMBLE`, `CMAG=na`; comp labels in NOTES. End-to-end tested with T CrB submission to AAVSO.
 
-- **Ensemble photometry.** Multiple comp stars → `CNAME=ENSEMBLE`, `CMAG=na`; list used stars in `NOTES`.
+- **Multiband TB/TG** from the OSC master (blue channel). Red channel is M-giant-dominated — needs care.
 - **User-specifiable target star.** Currently T CrB is hardcoded; isolate the target definition for easy extension.
 
 - **(Low priority — scientific extensions)**
   - **TG→V transformation** (`TRANS=YES`) with once-derived coefficients.
-  - **Multiband TB/TG** from the OSC master (blue channel). Red channel is M-giant-dominated — needs care.
 
 ## Coding conventions
 

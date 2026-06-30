@@ -51,10 +51,11 @@
 <li class="pidoc_tocItem"><a href="#__Dialog__">4&emsp;Dialog Reference</a>
 <ul>
 <li class="pidoc_tocSubitem"><a href="#__Dialog_Setup__">4.1&emsp;Step 1 &mdash; Setup</a></li>
-<li class="pidoc_tocSubitem"><a href="#__Dialog_Photometry__">4.2&emsp;Step 2 &mdash; Photometry</a></li>
-<li class="pidoc_tocSubitem"><a href="#__Dialog_Midtime__">4.3&emsp;Step 3 &mdash; Mid-time</a></li>
-<li class="pidoc_tocSubitem"><a href="#__Dialog_Verification__">4.4&emsp;Step 4 &mdash; Verification</a></li>
-<li class="pidoc_tocSubitem"><a href="#__Dialog_Report__">4.5&emsp;Step 5 &mdash; Report</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_CompStars__">4.2&emsp;Step 2 &mdash; Comp Stars</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Photometry__">4.3&emsp;Step 3 &mdash; Photometry</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Midtime__">4.4&emsp;Step 4 &mdash; Mid-time</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Verification__">4.5&emsp;Step 5 &mdash; Verification</a></li>
+<li class="pidoc_tocSubitem"><a href="#__Dialog_Report__">4.6&emsp;Step 6 &mdash; Report</a></li>
 </ul>
 </li>
 <li class="pidoc_tocItem"><a href="#__Outburst__">5&emsp;Outburst Strategy</a></li>
@@ -161,7 +162,7 @@
    <p class="pidoc_sectionToggleButton" onclick="pidoc_toggleSection( 'Dialog', this );">[hide]</p>
    <div id="Dialog">
 
-<p>The script presents a five-step wizard. A narrow left pane lists the steps; clicking a step label navigates to it. The <strong>Next &rsaquo;</strong> button at the bottom right advances to the next step. Photometry (step&nbsp;2) and the Report (step&nbsp;5) are generated automatically on entry; they do not require a separate button click.</p>
+<p>The script presents a six-step wizard. A narrow left pane lists the steps; clicking a step label navigates to it. The <strong>Next &rsaquo;</strong> button at the bottom right advances to the next step. Photometry (step&nbsp;3) and the Report (step&nbsp;6) are generated automatically on entry; they do not require a separate button click.</p>
 
 <div class="pidoc_subsection" id="__Dialog_Setup__">
    <h4 class="pidoc_subsectionTitle">4.1&emsp;Step 1 &mdash; Setup</h4>
@@ -177,20 +178,33 @@
 <dt><p>Comparison CSV</p></dt>
 <dd><p>Path to the AAVSO VSP photometry CSV downloaded in section&nbsp;<a href="#__GettingStarted_CSV__">3.1</a>. The path is remembered between sessions; the script re-prompts if the file no longer exists. Click <strong>Browse&hellip;</strong> to select a different file. The script reads all V-band rows, projects each star onto the image, and discards any that fall outside the frame or are flagged as blended in the CSV comments.</p></dd>
 
-<dt><p>Comp</p></dt>
-<dd><p>The comparison star used for the differential photometry calculation. The drop-down lists all usable in-frame V-band stars sorted brightest-to-faintest. The default selection is the star whose catalogue V magnitude is closest to <em>T&nbsp;CrB at quiescence</em> (10.0&nbsp;V), which minimises differential extinction and PSF fitting error. The same star cannot be selected for both Comp and Check; choosing one automatically removes it from the other drop-down.</p></dd>
-
-<dt><p>Check</p></dt>
-<dd><p>An independent comparison star used as a quality gate. Its derived magnitude is compared to catalogue; a deviation greater than 3&times;MERR triggers an orange warning on the Photometry step. Default: the star second-closest in V magnitude to 10.0&nbsp;V.</p></dd>
-
 <dt><p>Observer code</p></dt>
 <dd><p>Your AAVSO observer code, written into the <span class="pidoc_code">#OBSCODE=</span> line of the report header. The default is <span class="pidoc_code">BSLA</span>; change it to your own code before exporting. The value is remembered between sessions.</p></dd>
 </dl>
 
 </div>
 
+<div class="pidoc_subsection" id="__Dialog_CompStars__">
+   <h4 class="pidoc_subsectionTitle">4.2&emsp;Step 2 &mdash; Comp Stars</h4>
+
+<div style="text-align:center;">
+<img src="images/comp-stars.png" alt="Comp Stars step"/>
+</div>
+
+<p>This step runs a PSF discovery pass on all in-frame V-band candidates from the CSV and presents them in a table. Stars that pass quality checks and are within 2&nbsp;magnitudes of the target are pre-selected as the ensemble. The discovery pass is shared with the photometry step; no second PSF fit is performed.</p>
+
+<dl class="pidoc_list">
+<dt><p>Star table</p></dt>
+<dd><p>Each row shows the star&rsquo;s AAVSO chart label, AUID, catalogue V magnitude, &Delta;mag from the target, and PSF quality notes. A check mark in the first column indicates the star is included in the ensemble. Click any row to toggle inclusion. Stars outside the image frame, flagged as blended, or failing PSF quality checks are shown greyed out and cannot be selected.</p></dd>
+
+<dt><p>Check star</p></dt>
+<dd><p>Selected from the drop-down at the bottom of the panel. The check star is kept separate from the ensemble; it is not used to compute the zero-point. Its derived magnitude is compared to catalogue as an independent quality gate; a deviation greater than 3&times;MERR triggers an orange warning on the Photometry step.</p></dd>
+</dl>
+
+</div>
+
 <div class="pidoc_subsection" id="__Dialog_Photometry__">
-   <h4 class="pidoc_subsectionTitle">4.2&emsp;Step 2 &mdash; Photometry</h4>
+   <h4 class="pidoc_subsectionTitle">4.3&emsp;Step 3 &mdash; Photometry</h4>
 
 <div style="text-align:center;">
 <img src="images/photometry.png" alt="Photometry step"/>
@@ -203,10 +217,10 @@
 <dd><p>The derived magnitude of T&nbsp;CrB in the TG band, the filter label (<strong>TG</strong>), and the magnitude error MERR. MERR is propagated from the PSF fit residuals of both the target and the comparison star, combined in quadrature using a matched-filter formula.</p></dd>
 
 <dt><p>Raw PSF flux (instrumental magnitudes)</p></dt>
-<dd><p>The instrumental magnitudes &minus;2.5&nbsp;log<sub>10</sub>(flux) for the target (T&nbsp;CrB), the comparison star (Comp), and the check star (Check), with their AAVSO chart labels. These are the raw values before the catalogue offset is applied. Negative instrumental magnitudes are normal for bright stars.</p></dd>
+<dd><p>The instrumental magnitudes &minus;2.5&nbsp;log<sub>10</sub>(flux) for the target (T&nbsp;CrB), the ensemble (mean zero-point from all selected comp stars), and the check star, with labels. These are the raw values before the catalogue offset is applied. Negative instrumental magnitudes are normal for bright stars.</p></dd>
 
-<dt><p>Comparison star / Check star</p></dt>
-<dd><p>The AAVSO chart label and catalogue V magnitude of the selected Comp and Check stars.</p></dd>
+<dt><p>Ensemble / Check star</p></dt>
+<dd><p>The number of ensemble comp stars (N) and their combined zero-point, plus the AAVSO chart label and catalogue V magnitude of the check star.</p></dd>
 
 <dt><p>Linearity warning (yellow / orange)</p></dt>
 <dd><p>A supplementary heuristic checks the green-channel median of the active image. A linear master typically has a median below 0.05 (normalised). Values between 0.05 and 0.15 trigger a yellow advisory; values above 0.15 trigger an orange warning suggesting the image may be stretched. This is a heuristic only and does not block the report.</p></dd>
@@ -221,7 +235,7 @@
 </div>
 
 <div class="pidoc_subsection" id="__Dialog_Midtime__">
-   <h4 class="pidoc_subsectionTitle">4.3&emsp;Step 3 &mdash; Mid-time</h4>
+   <h4 class="pidoc_subsectionTitle">4.4&emsp;Step 4 &mdash; Mid-time</h4>
 
 <div style="text-align:center;">
 <img src="images/mid-time.png" alt="Mid-time step"/>
@@ -258,7 +272,7 @@
 </div>
 
 <div class="pidoc_subsection" id="__Dialog_Verification__">
-   <h4 class="pidoc_subsectionTitle">4.4&emsp;Step 4 &mdash; Verification</h4>
+   <h4 class="pidoc_subsectionTitle">4.5&emsp;Step 5 &mdash; Verification</h4>
 
 <div style="text-align:center;">
 <img src="images/verification.png" alt="Verification step"/>
@@ -271,7 +285,7 @@
 <dd>
 <ul class="pidoc_list">
 <li><strong>Green</strong> &mdash; T&nbsp;CrB (the target)</li>
-<li><strong>Blue</strong> &mdash; comparison star (Comp)</li>
+<li><strong>Blue</strong> &mdash; ensemble comparison stars</li>
 <li><strong>Yellow</strong> &mdash; check star (Check)</li>
 </ul>
 </dd>
@@ -284,14 +298,14 @@
 <li><strong>Auto stretch</strong> &mdash; midtone transfer function matched to the image median; stars are clearly visible.</li>
 <li><strong>Boosted</strong> &mdash; aggressive stretch that brings out faint stars; useful for confirming the check star position.</li>
 </ul>
-<p>Changing the stretch re-renders the thumbnail without leaving the dialog. The stretch applied here does not affect the photometry; measurements were already computed in step&nbsp;2.</p>
+<p>Changing the stretch re-renders the thumbnail without leaving the dialog. The stretch applied here does not affect the photometry; measurements were already computed in step&nbsp;3.</p>
 </dd>
 </dl>
 
 </div>
 
 <div class="pidoc_subsection" id="__Dialog_Report__">
-   <h4 class="pidoc_subsectionTitle">4.5&emsp;Step 5 &mdash; Report</h4>
+   <h4 class="pidoc_subsectionTitle">4.6&emsp;Step 6 &mdash; Report</h4>
 
 <div style="text-align:center;">
 <img src="images/report-human.png" alt="Report step — human-readable format"/>
@@ -308,7 +322,7 @@
 <div style="text-align:center;">
 <img src="images/report-aavso.png" alt="Report step — AAVSO Extended Format"/>
 </div>
-<p>A 15-field comma-delimited CSV observation line preceded by the required AAVSO file header. Submit via the <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a> form: select <strong>File upload</strong> in the first field, upload the <span class="pidoc_code">.txt</span> file, review the preview plot, and click Submit. See section&nbsp;<a href="#__Output__">6</a> for field details.</p>
+<p>A 15-field comma-delimited CSV observation line preceded by the required AAVSO file header. Submit via the <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a> form: select <strong>File upload</strong> in the first field, upload the <span class="pidoc_code">.txt</span> file, review the preview plot, and click Submit. See section&nbsp;<a href="#__Output__">6</a> for field details. This workflow has been tested end-to-end with a T&nbsp;CrB ensemble submission.</p>
 </dd>
 
 <dt><p>Export&hellip;</p></dt>
@@ -329,7 +343,7 @@
 
 <p>T&nbsp;CrB is expected to brighten by approximately 8 magnitudes from quiescence (~10&nbsp;V) to nova peak (~2&nbsp;V). As the target brightens the optimal comparison stars change.</p>
 
-<p><strong>Early brightening (~7&ndash;9&nbsp;mag):</strong> Chart X42597QE contains brighter comparison stars. Change the <strong>Comp</strong> and <strong>Check</strong> drop-downs in the Setup step before running:</p>
+<p><strong>Early brightening (~7&ndash;9&nbsp;mag):</strong> Chart X42597QE contains brighter comparison stars. In the <strong>Comp Stars</strong> step (step&nbsp;2), untick the fainter stars and tick the brighter ones; also update the <strong>Check</strong> drop-down accordingly:</p>
 
 <table>
 <tr><th>Label</th><th>AUID</th><th>V mag</th><th>Use when T CrB is near</th></tr>
@@ -356,7 +370,7 @@
 <pre>
 #TYPE=EXTENDED
 #OBSCODE=&lt;observer code&gt;
-#SOFTWARE=AAVSO Photometry 1.1.0
+#SOFTWARE=AAVSO Photometry 1.2.0
 #DELIM=,
 #DATE=JD
 #OBSTYPE=CCD
@@ -387,10 +401,10 @@
 <dd><p><span class="pidoc_code">STD</span> &mdash; standard (not differential) magnitude output.</p></dd>
 
 <dt><p>CNAME</p></dt>
-<dd><p>AUID of the comparison star (e.g. <span class="pidoc_code">000-BBW-796</span>), or chart label if no AUID is available.</p></dd>
+<dd><p>When N&nbsp;=&nbsp;1: AUID of the single comparison star (e.g. <span class="pidoc_code">000-BBW-796</span>). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">ENSEMBLE</span>. The list of ensemble star labels appears in NOTES.</p></dd>
 
 <dt><p>CMAG</p></dt>
-<dd><p>Instrumental magnitude of the comparison star (can be negative). Per AAVSO spec for <span class="pidoc_code">MTYPE=STD</span>.</p></dd>
+<dd><p>When N&nbsp;=&nbsp;1: instrumental magnitude of the comparison star (can be negative). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">na</span>. Per AAVSO spec for <span class="pidoc_code">MTYPE=STD</span> with ensemble.</p></dd>
 
 <dt><p>KNAME</p></dt>
 <dd><p>AUID of the check star.</p></dd>
@@ -408,7 +422,7 @@
 <dd><p>AAVSO VSP chart ID (e.g. <span class="pidoc_code">X42597QE</span>).</p></dd>
 
 <dt><p>NOTES</p></dt>
-<dd><p>Script name and version.</p></dd>
+<dd><p>Script name and version; for ensemble observations, also lists the comp star labels used (e.g. <span class="pidoc_code">comp 98+106+93;</span>).</p></dd>
 </dl>
 
    </div>
@@ -424,8 +438,8 @@
 <dt><p>TG band &ne; Johnson V</p></dt>
 <dd><p>The script measures in the <strong>TG</strong> band (OSC green channel), not Johnson&nbsp;V. For red stars, TG runs ~0.1&ndash;0.3&nbsp;mag brighter than V because the OSC green passband has a different effective wavelength than the standard V filter. T&nbsp;CrB has an M3&nbsp;III companion that dominates the combined light at quiescence, making this offset significant. The AAVSO report correctly records <span class="pidoc_code">FILT=TG</span> and <span class="pidoc_code">TRANS=NO</span>. Never relabel TG measurements as V.</p></dd>
 
-<dt><p>Single comparison star</p></dt>
-<dd><p>The current version uses one comparison star and one check star. Ensemble photometry (multiple comparison stars averaged) is planned for a future release. With a single comp star, any variability or measurement error in that star propagates directly into the T&nbsp;CrB magnitude.</p></dd>
+<dt><p>Single-comp fallback</p></dt>
+<dd><p>Selecting only one star in the Comp Stars step is mathematically equivalent to single-comparison-star differential photometry. The default is to use all qualifying in-frame V-band stars as an ensemble, which averages out individual comparison-star errors.</p></dd>
 
 <dt><p>DATE-OBS unreliable in stacked masters</p></dt>
 <dd><p>PixInsight&rsquo;s ImageIntegration writes <span class="pidoc_code">DATE-OBS</span> as the midpoint of sub <em>start</em> times, ignoring exposure duration. This gives a systematically early result. Always use the reference-file buttons in the Mid-time step to set Start and End from actual subframes.</p></dd>
@@ -457,7 +471,7 @@
 </div>
 
 <div id="footer">
-   <p>AAVSO Photometry script version 1.1.0</p>
+   <p>AAVSO Photometry script version 1.2.0</p>
 </div>
 <br/>
 <br/>

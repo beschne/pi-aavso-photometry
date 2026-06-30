@@ -16,10 +16,10 @@ expected to brighten by ~8 magnitudes from quiescence (~10 mag) to outburst (~2 
 The script reuses PixInsight's own facilities — the astrometric WCS solution,
 FITS keywords, and DynamicPSF — rather than reimplementing them externally.
 
-The dialog is a five-step wizard — Setup → Photometry → Mid-time → Verification → Report.
+The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-time → Verification → Report.
 
-![Setup step](screenshots/screenshot%2C%20v1.1.0%2C%20%281%29%20setup.png)
-![Verification step](screenshots/screenshot%2C%20v1.1.0%2C%20%285%29%20verification.png)
+![Setup step](screenshots/screenshot%2C%20v1.2.0%2C%20%281%29%20setup.png)
+![Comp Stars step](screenshots/screenshot%2C%20v1.2.0%2C%20%282%29%20comp%20stars.png)
 
 ---
 
@@ -79,7 +79,7 @@ If the stack is not yet plate-solved, run `Script > Astronomy > ImageSolver` fir
   PixInsight registers it under `Script > BeSchne > Photometry` and picks up code
   changes on every subsequent run without rescanning.
 
-### 5. Work through the five wizard steps
+### 5. Work through the six wizard steps
 
 **Step 1 — Setup**
 
@@ -87,18 +87,24 @@ If the stack is not yet plate-solved, run `Script > Astronomy > ImageSolver` fir
 |-------|------------|
 | **Active image** | Confirm it shows your stack |
 | **Comparison CSV** | Browse to the CSV you downloaded in step 2 |
-| **Comp / Check** | The dropdowns default to the two brightest usable V-band stars in the CSV. For quiescence (`98` / `106`) these are usually correct; see [Outburst strategy](#outburst-strategy) for nova peak |
+| **Observer code** | Enter your AAVSO observer code |
 
-**Step 2 — Photometry**
+**Step 2 — Comp Stars**
+
+The script runs a PSF discovery pass on all in-frame V-band candidates and presents
+them in a table with V mag, Δmag from target, and PSF quality notes. Stars that pass
+quality checks and are within 2 magnitudes of the target are pre-ticked as the ensemble.
+Click any row to toggle it. Select the **Check star** from the dropdown at the bottom.
+
+**Step 3 — Photometry**
 
 Photometry runs automatically when you click this step. The panel shows:
 - **Magnitude** (TG band), **Filter: TG**, **Error (MERR)**
-- **Raw PSF flux** — the instrumental magnitudes for target, comp, and check
-- **Comparison star** and **Check star** labels and catalogue V magnitudes
+- **Raw PSF flux** — the instrumental magnitudes for target, comp ensemble, and check
 - A red warning if incompatible processes are detected in the image history
 - An orange warning if the check-star deviation exceeds 3×MERR
 
-**Step 3 — Mid-time**
+**Step 4 — Mid-time**
 
 Use the **folder buttons** next to Start and End to reference your first and last
 surviving subframe. The script reads `DATE-OBS` and `EXPTIME` from the FITS header
@@ -106,13 +112,13 @@ and computes the mid-exposure time automatically as `(Start + End) / 2`.
 
 Verify the **Mid JD**, **airmass**, and **moon** readouts look reasonable.
 
-**Step 4 — Verification**
+**Step 5 — Verification**
 
-Inspect the annotated thumbnail: target (green circle), comp (blue), check (yellow).
+Inspect the annotated thumbnail: target (green circle), comp stars (blue), check (yellow).
 Confirm the circles land on the intended stars. Use the stretch buttons to bring out
 faint stars if needed.
 
-**Step 5 — Report**
+**Step 6 — Report**
 
 A human-readable report is generated automatically when you enter this step.
 Switch to **AAVSO Extended Format** for submission, then click **Export…** and save
@@ -226,12 +232,13 @@ To install it:
 
 | Source file (`screenshots/`) | Install as (`images/`) |
 |------------------------------|------------------------|
-| `screenshot, v1.1.0, (1) setup.png` | `setup.png` |
-| `screenshot, v1.1.0, (2) photometry.png` | `photometry.png` |
-| `screenshot, v1.1.0, (3) mid-time.png` | `mid-time.png` |
-| `screenshot, v1.1.0, (5) verification.png` | `verification.png` |
-| `screenshot, v1.1.0, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v1.1.0, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v1.2.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.2.0, (2) comp stars.png` | `comp-stars.png` |
+| `screenshot, v1.2.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v1.2.0, (4) mid-time.png` | `mid-time.png` |
+| `screenshot, v1.2.0, (5) verification.png` | `verification.png` |
+| `screenshot, v1.2.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.2.0, (6) report, aavso.png` | `report-aavso.png` |
 
 ---
 
