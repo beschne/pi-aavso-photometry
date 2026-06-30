@@ -118,6 +118,8 @@ Inspect the annotated thumbnail: target (green circle), comp stars (blue), check
 Confirm the circles land on the intended stars. Use the stretch buttons to bring out
 faint stars if needed.
 
+![Verification step](screenshots/screenshot%2C%20v1.2.0%2C%20%285%29%20verification.png)
+
 **Step 6 — Report**
 
 A human-readable report is generated automatically when you enter this step.

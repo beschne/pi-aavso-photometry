@@ -119,6 +119,8 @@ Annotiertes Thumbnail prüfen: Ziel (grüner Kreis), Comp-Sterne (blau), Check (
 Bestätigen, dass die Kreise auf den richtigen Sternen liegen. Die Stretch-Schaltflächen
 verwenden, um schwache Sterne besser sichtbar zu machen.
 
+![Verifikation](screenshots/screenshot%2C%20v1.2.0%2C%20%285%29%20verification.png)
+
 **Schritt 6 — Bericht**
 
 Der Bericht wird automatisch beim Öffnen dieses Schritts erzeugt.
