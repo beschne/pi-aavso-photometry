@@ -70,7 +70,7 @@
 - [x] **Input validation** — `parseCoord` validates lat/lon with range clamping; `isoToJD` validates ISO format via regex; observer code stripped of newlines before writing to report header
 - [x] **CSV content sanitisation** — AUIDs and notes pass through `sanitizeField` (strips `,\r\n`); star labels in HTML contexts pass through `escHtml` (escapes `<>&`)
 - [x] **FITS keyword sanitisation** — `detectForbiddenHistory` emits only names from a hardcoded whitelist, never raw FITS values; image ID is an internal PI identifier not a FITS value
-- [x] **File path handling** — both CSV path and export path originate from `OpenFileDialog` / `SaveFileDialog`; no path traversal possible
+- [x] **File path handling** — CSV path and export path originate from `OpenFileDialog` / `SaveFileDialog`; XISF header read uses `_window.filePath` (set by PI when the user opens a file) or a fallback `OpenFileDialog`; `File.exists()` guard before open; magic-byte check (`XISF`) and 8 MB header cap inside `readXISFFrameCount`; no path traversal possible
 - [x] **No unintended network access** — no `NetworkTransfer` calls; only a static URL string inside a `MessageBox`
 - [x] **Settings namespace isolation** — all keys under `BeSchne/Photometry/`; PJSR Settings keys are globally scoped by the full key string so there is no cross-script leakage
 

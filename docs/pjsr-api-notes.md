@@ -293,7 +293,38 @@ var frameExp = view.propertyValue( "Instrument:FrameExposureTime" );
 var frames = Math.round( maxTot / parseFloat( String( frameExp ) ) );
 ```
 
-**`PixInsight:ProcessingHistory` is NOT loaded into the in-memory view.** It exists in the XISF file on disk (accessible via Python/XML parsing) but `view.propertyValue("PixInsight:ProcessingHistory")` returns `null`. Do not rely on it from PJSR.
+**`PixInsight:ProcessingHistory` is NOT loaded into the in-memory view.** `view.propertyValue("PixInsight:ProcessingHistory")` always returns `null`. Read the raw XISF binary header from disk instead (it is only ~282 KB — the image data is not touched):
+
+```js
+// XISF fixed header layout: signature (8 bytes) + XML length (4 bytes LE uint32) + reserved (4 bytes)
+var f = new File;
+f.openForReading( filePath );   // NOT f.open(path, FileMode_Read) — FileMode_Read is undefined in PJSR
+var sigBytes = f.read( DataType_ByteArray, 8 );   // "XISF0100"
+var lenBytes = f.read( DataType_ByteArray, 4 );
+var hdrLen   = lenBytes[0] | (lenBytes[1] << 8) | (lenBytes[2] << 16) | (lenBytes[3] << 24);
+f.read( DataType_ByteArray, 4 );                  // reserved
+var xmlBytes = f.read( DataType_ByteArray, hdrLen );
+f.close();
+
+// Convert ByteArray to string in chunks (avoids O(n²) concatenation in V8):
+var xml = "", CHUNK = 8192;
+for ( var i = 0; i < xmlBytes.length; i += CHUNK ) {
+   var arr = [];
+   for ( var j = i, end = Math.min( i + CHUNK, xmlBytes.length ); j < end; ++j )
+      arr.push( xmlBytes[j] );
+   xml += String.fromCharCode.apply( null, arr );
+}
+
+// ProcessingHistory is entity-encoded inside the outer XISF XML (&quot; for ", &lt; for <).
+// To get ImageIntegration's frame count:
+var m = xml.match( /class=&quot;ImageIntegration&quot;[\s\S]*?rows=&quot;(\d+)&quot;/ );
+var frameCount = m ? parseInt( m[1], 10 ) : NaN;
+```
+
+**Frame count priority for WBPP masters** (NCOMBINE is not written by WBPP):
+1. Parse `PixInsight:ProcessingHistory` from the XISF file on disk (method above) — authoritative.
+2. `NCOMBINE` FITS keyword — present for standalone ImageIntegration runs.
+3. `PCL:TotalExposureTime` / `Instrument:FrameExposureTime` — unreliable: the total is a weighted/scaled signal metric that differs per channel and does not equal N × frameExp when some subs lack `Instrument:ExposureTime` XISF metadata.
 
 ## TreeBox
 

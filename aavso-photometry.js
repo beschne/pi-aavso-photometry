@@ -24,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.3.0";
+const VERSION = "1.3.1";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -490,6 +490,52 @@ function jdToISO( jd ) {
 // ============================================================
 // FITS / XISF keyword reader
 // ============================================================
+
+// Reads the XISF binary header from disk and returns the number of frames fed to
+// ImageIntegration.  PixInsight:ProcessingHistory is never loaded into the in-memory
+// View (propertyValue() always returns null), so we parse the raw file instead.
+// The header XML is ~282 KB; the full image data is never read.
+function readXISFFrameCount( filePath ) {
+   if ( !filePath ) return NaN;
+   try {
+      var f = new File;
+      f.openForReading( filePath );
+
+      // XISF monolithic fixed header: signature (8) + XML-header length (4, LE uint32) + reserved (4)
+      var sigBytes = f.read( DataType_ByteArray, 8 );
+      if ( sigBytes[0] !== 88 || sigBytes[1] !== 73 ||   // 'X','I'
+           sigBytes[2] !== 83 || sigBytes[3] !== 70 )    // 'S','F'
+         { f.close(); return NaN; }
+
+      var lenBytes = f.read( DataType_ByteArray, 4 );
+      var hdrLen   = lenBytes[0] | (lenBytes[1] << 8) |
+                     (lenBytes[2] << 16) | (lenBytes[3] << 24);
+      f.read( DataType_ByteArray, 4 );   // reserved
+
+      if ( hdrLen <= 0 || hdrLen > 8 * 1024 * 1024 ) { f.close(); return NaN; }
+
+      var xmlBytes = f.read( DataType_ByteArray, hdrLen );
+      f.close();
+
+      // Convert ByteArray → JS string in 8 KB chunks to avoid O(n²) concatenation.
+      var xml = "", CHUNK = 8192;
+      for ( var i = 0; i < xmlBytes.length; i += CHUNK ) {
+         var arr = [];
+         for ( var j = i, end = Math.min( i + CHUNK, xmlBytes.length ); j < end; ++j )
+            arr.push( xmlBytes[j] );
+         xml += String.fromCharCode.apply( null, arr );
+      }
+
+      // ProcessingHistory is entity-encoded inside the outer XISF XML:
+      //   class=&quot;ImageIntegration&quot; ... <table ... rows=&quot;N&quot;
+      var m = xml.match( /class=&quot;ImageIntegration&quot;[\s\S]*?rows=&quot;(\d+)&quot;/ );
+      return m ? parseInt( m[1], 10 ) : NaN;
+
+   } catch ( e ) {
+      console.warningln( "readXISFFrameCount: " + e.message );
+      return NaN;
+   }
+}
 
 // Returns an array of FITSKeyword objects from a file on disk.
 // readImage() is called to ensure keywords are populated (format requirement).
@@ -2230,10 +2276,39 @@ class PhotometryDialog extends Dialog {
          self.elevEdit.text = ( siteKw.elev !== null )
             ? format( "%.0f", siteKw.elev ) : ( self.elevEdit.text || "0" );
 
-         // Frame count from FITS/XISF properties
+         // Frame count from FITS/XISF properties — three methods in priority order
          var _kws    = _window.keywords;
          var expFits = findKeyword( _kws, "EXPTIME" );
          var _mv     = _window.mainView;
+         var _n = NaN;
+         var _nSource = "";
+
+         // 1) ProcessingHistory from the XISF file on disk — reads only the 282 KB XML header,
+         //    not the image data.  View.propertyValue("PixInsight:ProcessingHistory") always
+         //    returns null (the property is never loaded into memory), so we read the file directly.
+         var _xisfPath = _window.filePath;
+         if ( _xisfPath && !File.exists( _xisfPath ) ) {
+            // File has moved (PI project relocated, different machine, etc.).
+            // Offer the user a chance to locate it so the exact frame count can be read.
+            var _relDlg = new OpenFileDialog();
+            _relDlg.caption = "Locate master light XISF to read frame count";
+            _relDlg.filters = [["XISF Files", "*.xisf"]];
+            _xisfPath = _relDlg.execute() ? _relDlg.filePath : null;
+         }
+         if ( _xisfPath && File.exists( _xisfPath ) ) {
+            var _nHist = readXISFFrameCount( _xisfPath );
+            if ( _nHist > 0 ) { _n = _nHist; _nSource = "ProcessingHistory"; }
+         }
+
+         // 2) NCOMBINE FITS keyword — written by standalone ImageIntegration but absent in WBPP masters.
+         if ( isNaN(_n) ) {
+            var _nc = findKeyword( _kws, "NCOMBINE" );
+            if ( _nc ) { _n = parseInt( _nc, 10 ); _nSource = "NCOMBINE"; }
+         }
+
+         // 3) Exposure-derived fallback: PCL:TotalExposureTime / Instrument:FrameExposureTime.
+         //    Known to under-count when some subs lack the Instrument:ExposureTime XISF property.
+         var _nExp = NaN;
          var _totalExp = _mv.propertyValue( "PCL:TotalExposureTime" );
          var _frameExp = _mv.propertyValue( "Instrument:FrameExposureTime" );
          if ( _totalExp !== null && _frameExp !== null ) {
@@ -2241,12 +2316,21 @@ class PhotometryDialog extends Dialog {
                               .split( ',' ).map( parseFloat )
                               .filter( function(x) { return !isNaN(x); } );
             var _maxTot = _totNums.length ? Math.max.apply( null, _totNums ) : NaN;
-            var _n = Math.round( _maxTot / parseFloat( String( _frameExp ) ) );
-            if ( _n > 0 ) self.framesEdit.text = String( _n );
+            _nExp = Math.round( _maxTot / parseFloat( String( _frameExp ) ) );
          }
-         if ( !self.framesEdit.text ) {
-            var _nc = findKeyword( _kws, "NCOMBINE" );
-            if ( _nc ) self.framesEdit.text = _nc;
+         if ( isNaN(_n) && _nExp > 0 ) { _n = _nExp; _nSource = "exposure-derived"; }
+
+         if ( _n > 0 ) {
+            self.framesEdit.text = String( _n );
+            if ( _nSource === "ProcessingHistory" ) {
+               console.writeln( "Frame count: " + _n + " (from " + _nSource + ")" +
+                  ( (!isNaN(_nExp) && _nExp !== _n)
+                    ? "  [exposure-derived was " + _nExp + " — " + (_n - _nExp) + " subs lacked XISF exposure metadata]"
+                    : "" ) );
+            } else {
+               console.warningln( "Frame count: " + _n + " (from " + _nSource +
+                  ") — ProcessingHistory unavailable; verify the Frames field manually." );
+            }
          }
          if ( expFits && !self.exptimeEdit.text ) {
             var expVal = parseFloat( expFits );
