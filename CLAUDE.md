@@ -235,7 +235,7 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). T
 | **1 — Comp Stars** | `compStarsPanel` | TreeBox (5 cols: ✓, Label, AUID, V mag, Δmag, Quality) listing all in-frame V-band candidates; **Check** ComboBox at bottom; `updateCompCount()` label |
 | **2 — Photometry** | `runPanel` | Magnitude + Filter TG + Error (MERR); Raw PSF flux row (T/ensemble/check instrumental mags); `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation) |
 | **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
-| **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = green circle, comp stars = blue, check = yellow); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
+| **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = red circle, comp stars = green, check = cyan); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
 | **5 — Report** | `reportPanel` | Format RadioButtons (Human readable default, AAVSO Extended); scrollable read-only `TextBox` preview; Export button (opens `SaveFileDialog`, writes immediately) |
 
 **RadioButton grouping:** three independent exclusive groups, each with a different parent to avoid Qt's per-parent exclusion colliding across groups:
