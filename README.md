@@ -118,12 +118,13 @@ A human-readable report is generated automatically when you enter this step.
 Switch to **AAVSO Extended Format** for submission, then click **Export…** and save
 with a `.txt` extension.
 
-### 8. Submit to AAVSO WebObs
+### 8. Submit to AAVSO
 
-1. Go to [aavso.org/webobs](https://www.aavso.org/webobs) and log in
-2. Click **Submit Observations** → **Upload File**
+1. Go to the [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) form and log in
+2. In the first field, select **File upload** (not Manual)
 3. Upload the exported `.txt` file
-4. Verify the observation appears correctly in your recent submissions
+4. Review the preview — your observation is plotted against historical data
+5. Click **Submit** to confirm
 
 ---
 
@@ -205,8 +206,8 @@ actual subframes rather than trusting the stack's `DATE-OBS`.
 **Human-readable report** (default): a formatted text summary suitable for personal
 records and quick review.
 
-**AAVSO Extended Format** (on demand): 15-field CSV for direct submission to
-[AAVSO WebObs](https://www.aavso.org/webobs). Key choices:
+**AAVSO Extended Format** (on demand): 15-field CSV for direct submission via
+the [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) form (select **File upload**). Key choices:
 `FILT=TG`, `TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
 
 ---

@@ -116,12 +116,13 @@ Der Bericht wird automatisch beim Öffnen dieses Schritts erzeugt.
 Für die AAVSO-Einreichung **AAVSO Extended Format** wählen, dann **Exportieren …** klicken
 und mit Endung `.txt` speichern.
 
-### 8. Bericht bei AAVSO WebObs einreichen
+### 8. Bericht bei AAVSO einreichen
 
-1. [aavso.org/webobs](https://www.aavso.org/webobs) aufrufen und einloggen
-2. **Beobachtungen einreichen** → **Datei hochladen**
+1. Das Formular [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) aufrufen und einloggen
+2. Im ersten Feld **File upload** auswählen (nicht Manual)
 3. Die exportierte `.txt`-Datei hochladen
-4. Prüfen, ob die Beobachtung korrekt in den eigenen Einreichungen erscheint
+4. Vorschau prüfen — die Beobachtung wird gegen historische Daten geplottet
+5. **Submit** klicken, um zu bestätigen
 
 ---
 
@@ -204,8 +205,8 @@ aus echten Subframes zu setzen.
 
 **Lesbare Zusammenfassung** (Standard): formatierter Textbericht für persönliche Unterlagen.
 
-**AAVSO Extended Format** (auf Anforderung): 15-Felder-CSV zur direkten Einreichung bei
-[AAVSO WebObs](https://www.aavso.org/webobs). Schlüsselwerte:
+**AAVSO Extended Format** (auf Anforderung): 15-Felder-CSV zur direkten Einreichung über das Formular
+[AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) (**File upload** auswählen). Schlüsselwerte:
 `FILT=TG`, `TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
 
 ---

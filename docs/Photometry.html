@@ -28,7 +28,7 @@
 <hr class="separator"/>
 
 <div id="brief">
-<p>Differential PSF photometry of variable stars directly inside PixInsight, with export to the AAVSO Extended File Format for submission to <a href="https://www.aavso.org/webobs">AAVSO WebObs</a>. Preconfigured for T&nbsp;Coronae Borealis (the &ldquo;Blaze Star&rdquo;). <a href="#__contents__">[more]</a></p>
+<p>Differential PSF photometry of variable stars directly inside PixInsight, with export to the AAVSO Extended File Format for submission to <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a>. Preconfigured for T&nbsp;Coronae Borealis (the &ldquo;Blaze Star&rdquo;). <a href="#__contents__">[more]</a></p>
 </div>
 
 <div id="keywords">
@@ -74,7 +74,7 @@
 
 <p>This script performs <em>differential PSF photometry</em> of a variable star against one or more comparison stars of known magnitude, using only the tools already present in PixInsight: the WCS astrometric solution from <a href="../../scripts/ImageSolver/ImageSolver.html">ImageSolver</a>, the Gaussian PSF fitter from <a href="../../tools/DynamicPSF/DynamicPSF.html">DynamicPSF</a>, and the FITS keywords written by the standard calibration and integration pipeline.</p>
 
-<p>The script is currently preconfigured for <strong>T&nbsp;Coronae Borealis</strong> (T&nbsp;CrB), a recurrent nova known as the &ldquo;Blaze Star&rdquo;. At quiescence T&nbsp;CrB sits near 10th magnitude; an outburst is predicted to bring it to approximately 2nd magnitude &mdash; an increase of roughly 8 magnitudes in a few days. The script measures the brightness of T&nbsp;CrB in the <strong>TG</strong> (tri-colour green) photometric band and writes the result in the <strong>AAVSO Extended File Format</strong> for direct upload to <a href="https://www.aavso.org/webobs">AAVSO WebObs</a>.</p>
+<p>The script is currently preconfigured for <strong>T&nbsp;Coronae Borealis</strong> (T&nbsp;CrB), a recurrent nova known as the &ldquo;Blaze Star&rdquo;. At quiescence T&nbsp;CrB sits near 10th magnitude; an outburst is predicted to bring it to approximately 2nd magnitude &mdash; an increase of roughly 8 magnitudes in a few days. The script measures the brightness of T&nbsp;CrB in the <strong>TG</strong> (tri-colour green) photometric band and writes the result in the <strong>AAVSO Extended File Format</strong> for direct upload to <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a>.</p>
 
 <p>The script works on a single <em>linear</em>, <em>plate-solved</em> OSC RGB master light stack. It measures each star by fitting a two-dimensional Gaussian PSF to the green channel, computes instrumental magnitudes from the fitted flux, and applies the standard differential photometry formula:</p>
 
@@ -308,11 +308,11 @@
 <div style="text-align:center;">
 <img src="images/report-aavso.png" alt="Report step — AAVSO Extended Format"/>
 </div>
-<p>A 15-field comma-delimited CSV observation line preceded by the required AAVSO file header. This format is ready for direct upload to <a href="https://www.aavso.org/webobs">AAVSO WebObs</a>. See section&nbsp;<a href="#__Output__">6</a> for field details.</p>
+<p>A 15-field comma-delimited CSV observation line preceded by the required AAVSO file header. Submit via the <a href="https://apps.aavso.org/v2/data/submit/photometry/">AAVSO Submit Photometric Observations</a> form: select <strong>File upload</strong> in the first field, upload the <span class="pidoc_code">.txt</span> file, review the preview plot, and click Submit. See section&nbsp;<a href="#__Output__">6</a> for field details.</p>
 </dd>
 
 <dt><p>Export&hellip;</p></dt>
-<dd><p>Opens a save-file dialog. Save with a <span class="pidoc_code">.txt</span> extension for AAVSO WebObs compatibility. The file is written immediately; the dialog preview is a live view of what will be saved.</p></dd>
+<dd><p>Opens a save-file dialog. Save with a <span class="pidoc_code">.txt</span> extension. The file is written immediately; the dialog preview is a live view of what will be saved.</p></dd>
 </dl>
 
    </div>
