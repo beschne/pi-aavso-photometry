@@ -91,12 +91,9 @@
 ## Roadmap items not in scope for v1
 
 - [ ] **Full PixInsight XHTML documentation.** PI's native doc system requires a well-formed XHTML file at `<PI install>/doc/scripts/BeSchne/Photometry.html`. Users of GitHub-distributed scripts must copy it manually (no Update Repository). Wiring: `Dialog.browseScriptDocumentation("Photometry")` from the `?` help button. Contents should mirror the README getting-started guide, include screenshots, and document every dialog control formally. Defer until there is demand from other users or the script enters the PI Update Repository.
-- [ ] **UI redesign — tabbed / step-oriented layout.** The current single long dialog is hard to navigate and hides the verification image behind a modal window. Ideas to explore:
-  - Tab strip across the top (or step list on the left): **Setup** → **Run** → **Timing** → **Report**
-  - Remaining panel space used for the verification thumbnail (currently a separate window) and the report preview side-by-side
-  - Eliminates the modal-blocks-image-window problem: verification thumbnail lives inside the dialog
-  - Consider whether non-modal (`show()` + explicit "Close" state machine) is worth the added complexity vs. a well-structured modal with embedded panels
-- [ ] **Verification image stretch controls.** Currently the stretch is fixed at run time and cannot be changed without interacting with a separate image window (blocked by modal dialog). Add on-demand stretch options, e.g. radio buttons or a button group: **Auto** (current formula, `mtf(0.25, median)`) / **Boosted** (more aggressive: lower target background, e.g. `mtf(0.1, median)`) / **Linear** (no stretch, raw pixel values). If the thumbnail is embedded in the dialog (see UI redesign above), these controls sit alongside it; otherwise they re-render the separate verification window.
+- [x] **UI redesign — tabbed / step-oriented layout.** Implemented as a 5-step wizard (Setup → Photometry → Mid-time → Verification → Report) with a left-pane step navigator and embedded verification thumbnail. Photometry and report auto-trigger on step entry.
+- [x] **Verification image stretch controls.** No Stretch / Auto / Boosted radio buttons embedded in the Verification step; re-render on change without leaving the dialog.
+- [ ] **Recommend brighter comp/check stars when T CrB has brightened.** After photometry runs, compare `_tcrb_mag` against `TARGET.magQuiescence`. If T CrB is more than ~1 mag brighter than quiescence, the current comp/check pair is likely too faint (poor SNR, large MERR) or the magnitude difference is too large for accurate differential photometry. Show a suggestion in the Photometry step: propose the next brighter pair from the current CSV (if available), or advise the user to load a new VSP chart with a brighter magnitude range. The threshold and the suggestion text should reference the outburst strategy in `docs/domain-knowledge.md`.
 - [ ] Ensemble photometry (`CNAME=ENSEMBLE`)
 - [ ] User-specifiable target star
 - [ ] TG→V transformation (`TRANS=YES`)
