@@ -6,12 +6,12 @@
                PixInsight. Requires a linear, plate-solved OSC RGB master \
                stack and a comparison-star CSV from AAVSO VSP. Fits PSFs via \
                DynamicPSF (green channel, TG band), derives the target \
-               magnitude from one comp star, checks quality against a check \
-               star, and writes an AAVSO Extended File Format report. \
-               Currently configured for T Coronae Borealis (the Blaze Star). \
-               Observer site coordinates are read automatically from FITS \
-               keywords. See the project README on GitHub for a full \
-               getting-started guide.
+               magnitude from an ensemble of comp stars (or a single comp), \
+               checks quality against a check star, and writes an AAVSO \
+               Extended File Format report. Currently configured for T Coronae \
+               Borealis (the Blaze Star). Observer site coordinates are read \
+               automatically from FITS keywords. See the project README on \
+               GitHub for a full getting-started guide.
 
 #include <pjsr/DataType.jsh>
 #include <pjsr/UndoFlag.jsh>
@@ -24,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -75,6 +75,13 @@ const VERIFY_CIRCLE_RADIUS = 25;
 const VERIFY_PADDING = 80;
 // Maximum side length of the thumbnail shown in the verification window.
 const VERIFY_MAX_SIDE = 1000;
+
+// --- Ensemble photometry -----------------------------------------
+// Stars more than this many magnitudes from TARGET.magQuiescence are not
+// pre-selected by default (user can still tick them manually).
+const ENSEMBLE_MAX_DELTA_MAG  = 2.0;
+// Maximum number of stars pre-selected as comp ensemble by default.
+const ENSEMBLE_DEFAULT_MAX_N  = 6;
 
 // --- Settings keys -----------------------------------------------
 const SETTINGS_NS          = "BeSchne/Photometry";
@@ -658,15 +665,17 @@ function detectForbiddenHistory( win ) {
 // checkPix may be null if the check star PSF was rejected.
 // Called after PSF fitting succeeds, before writing the report.
 // Works on a private temporary copy — the original image is never modified.
-function createVerificationImage( win, targetPix, compStar, compPix, checkStar, checkPix, stretchMode ) {
+// compEntries: array of {x, y, star:{label, magV}} from _allInFrame (ensemble comp stars).
+function createVerificationImage( win, targetPix, compEntries, checkStar, checkPix, stretchMode ) {
    if ( stretchMode === undefined ) stretchMode = 1;
    var img  = win.mainView.image;
    var imgW = img.width;
    var imgH = img.height;
 
    // Bounding box around all located stars, plus padding.
-   var xs = [ targetPix.x, compPix.x ];
-   var ys = [ targetPix.y, compPix.y ];
+   var xs = [ targetPix.x ];
+   var ys = [ targetPix.y ];
+   compEntries.forEach( function(e) { xs.push( e.x ); ys.push( e.y ); } );
    if ( checkPix ) { xs.push( checkPix.x ); ys.push( checkPix.y ); }
 
    var x0 = Math.max( 0,    Math.floor( Math.min.apply( null, xs ) ) - VERIFY_PADDING );
@@ -768,11 +777,13 @@ function createVerificationImage( win, targetPix, compStar, compPix, checkStar, 
    }
 
    starAnnotation( targetPix, 0xffff4444, TARGET.name );
-   starAnnotation( compPix,   0xff44ff44,
-      compStar.label  + "  " + format( "%.3f", compStar.magV  ) + " V" );
-   if ( checkPix )
+   compEntries.forEach( function(e) {
+      starAnnotation( { x: e.x, y: e.y }, 0xff44ff44,
+         "C" + e.star.label + "  " + format( "%.3f", e.star.magV ) + " V" );
+   });
+   if ( checkPix && checkStar )
       starAnnotation( checkPix, 0xff44ffff,
-         checkStar.label + "  " + format( "%.3f", checkStar.magV ) + " V" );
+         "K" + checkStar.label + "  " + format( "%.3f", checkStar.magV ) + " V" );
 
    g.end();
 
@@ -793,29 +804,34 @@ class PhotometryDialog extends Dialog {
       var self = this;
 
       // ---- Internal state ----
-      var _photDone   = false;
-      var _compStar   = null;
-      var _checkStar  = null;
-      var _csvUsable  = [];   // full sorted list from CSV
-      var _compStars  = [];   // filtered view shown in compCombo (excludes selected check)
-      var _checkStars = [];   // filtered view shown in checkCombo (excludes selected comp)
-      var _startJD    = NaN;
-      var _endJD      = NaN;
-      var _midMode    = 0;       // 0=(Start+End)/2  1=Start  2=Manual
-      var _window     = ImageWindow.activeWindow;
-      var _currentStep = 0;
-      var _csvPath    = Settings.read( SETTINGS_CSV, DataType_String ) || "";
-      var _tcrb_mag   = NaN;
-      var _merr       = NaN;
-      var _instMag_T  = null;
-      var _instMag_C  = null;
-      var _instMag_K  = null;
+      var _photDone      = false;
+      var _discoveryDone = false;
+      var _checkStar     = null;
+      var _startJD       = NaN;
+      var _endJD         = NaN;
+      var _midMode       = 0;       // 0=(Start+End)/2  1=Start  2=Manual
+      var _window        = ImageWindow.activeWindow;
+      var _currentStep   = 0;
+      var _csvPath       = Settings.read( SETTINGS_CSV, DataType_String ) || "";
+      var _tcrb_mag      = NaN;
+      var _merr          = NaN;
+      var _instMag_T     = null;
+      var _instMag_K     = null;
       var _checkGateWarn = false;
-      var _reportText = "";
+      var _reportText    = "";
       var _verifyBmp     = null;
       var _scaledBmp     = null;
       var _verifyStretch = 1;    // 0=none  1=auto  2=boosted
       var _verifyArgs    = null; // cached args for re-render on stretch change
+
+      // ---- Ensemble state (set by runDiscovery / runPhotometry) ----
+      var _allInFrame     = [];   // [{star, x, y, psf, qualityMsg, deltaMag, recommended, instMag}]
+      var _checkEligible  = [];   // subset of _allInFrame eligible as check star
+      var _ensembleEntries= [];   // selected _allInFrame entries used as comp ensemble
+      var _instMag_Cs     = [];   // instrumental mag for each ensemble entry (parallel array)
+      var _ensembleZP     = NaN;  // mean zero-point = mean(magV_i - instMag_i)
+      var _targetPix      = null; // cached from discovery
+      var _targetPSF      = null; // cached from discovery
 
       // ---- Public result ----
       this.midJD = NaN;
@@ -827,15 +843,17 @@ class PhotometryDialog extends Dialog {
       var _stepBtns = [];
 
       function isStepEnabled( idx ) {
-         if ( idx <= 2 ) return true;
-         if ( idx === 3 ) return _photDone;
-         if ( idx === 4 ) return _photDone && !isNaN( self.midJD );
+         if ( idx <= 1 ) return true;                                   // Setup, Comp Stars
+         if ( idx === 2 ) return _discoveryDone && _ensembleEntries.length > 0; // Photometry
+         if ( idx === 3 ) return _photDone;                             // Mid-time
+         if ( idx === 4 ) return _photDone;                             // Verification
+         if ( idx === 5 ) return _photDone && !isNaN( self.midJD );     // Report
          return false;
       }
 
       function updateStepNav() {
          _stepBtns.forEach( function( ctrl ) { ctrl.repaint(); } );
-         if ( _currentStep === 4 ) {
+         if ( _currentStep === 5 ) {
             self.nextBtn.text    = "Close";
             self.nextBtn.enabled = true;
          } else {
@@ -847,17 +865,24 @@ class PhotometryDialog extends Dialog {
       function activateStep( idx ) {
          if ( !isStepEnabled( idx ) ) return;
          _currentStep = idx;
-         var panels = [ setupPanel, runPanel, midtimePanel, verifyPanel, reportPanel ];
+         var panels = [ setupPanel, compStarsPanel, runPanel, midtimePanel, verifyPanel, reportPanel ];
          panels.forEach( function( p, i ) { p.visible = ( i === idx ); } );
          updateStepNav();
          if ( idx === 1 ) {
+            try { runDiscovery(); }
+            catch ( e ) {
+               new MessageBox( (e && e.message) ? e.message : String(e),
+                               TITLE, StdIcon.Warning, StdButton.Ok ).execute();
+            }
+         }
+         if ( idx === 2 ) {
             try { runPhotometry(); }
             catch ( e ) {
                new MessageBox( (e && e.message) ? e.message : String(e),
                                TITLE, StdIcon.Warning, StdButton.Ok ).execute();
             }
          }
-         if ( idx === 4 ) generateReport();
+         if ( idx === 5 ) generateReport();
       }
 
       // ============================================================
@@ -948,7 +973,7 @@ class PhotometryDialog extends Dialog {
          if ( !_verifyArgs ) return;
          _verifyBmp = createVerificationImage(
             _verifyArgs.win, _verifyArgs.targetPix,
-            _verifyArgs.compStar, _verifyArgs.compPix,
+            _verifyArgs.compEntries,
             _verifyArgs.checkStar, _verifyArgs.checkPix,
             _verifyStretch
          );
@@ -1026,10 +1051,6 @@ class PhotometryDialog extends Dialog {
             _csvPath = dlg.filePath;
             self.csvEdit.text = _csvPath;
             Settings.write( SETTINGS_CSV, DataType_String, _csvPath );
-            try {
-               var _browseStars = loadComparisonStars( _csvPath );
-               populateStarCombos( _browseStars.filter( s => !s.blended ) );
-            } catch(e) { /* error surfaced at Run */ }
          }
       };
 
@@ -1038,93 +1059,6 @@ class PhotometryDialog extends Dialog {
       csvRow.add( csvLblTag );
       csvRow.add( this.csvEdit, 100 );
       csvRow.add( this.csvBrowseBtn );
-
-      function fillCombo( combo, stars ) {
-         while ( combo.numberOfItems > 0 ) combo.removeItem( 0 );
-         stars.forEach( function(s) {
-            combo.addItem( s.label + "  (" + format( "%.3f", s.magV ) + " V)" );
-         } );
-      }
-
-      function populateStarCombos( usable ) {
-         // Display order: brightest to faintest (easiest to browse)
-         _csvUsable = usable.slice().sort( function(a,b) { return a.magV - b.magV; } );
-
-         // Default selection: two stars closest in brightness to the target at quiescence.
-         // Proximity minimises differential extinction and PSF-fitting error contribution.
-         var byProximity = _csvUsable.slice().sort( function(a,b) {
-            return Math.abs( a.magV - TARGET.magQuiescence ) - Math.abs( b.magV - TARGET.magQuiescence );
-         } );
-         var defComp  = byProximity.length > 0 ? byProximity[0].label : null;
-         var defCheck = byProximity.length > 1 ? byProximity[1].label : null;
-
-         // each combo excludes the other's default
-         _compStars  = _csvUsable.filter( function(s) { return s.label !== defCheck; } );
-         _checkStars = _csvUsable.filter( function(s) { return s.label !== defComp;  } );
-
-         fillCombo( self.compCombo,  _compStars  );
-         fillCombo( self.checkCombo, _checkStars );
-
-         var compIdx  = _compStars.findIndex(  function(s) { return s.label === defComp;  } );
-         var checkIdx = _checkStars.findIndex( function(s) { return s.label === defCheck; } );
-         self.compCombo.currentItem  = compIdx  >= 0 ? compIdx  : 0;
-         self.checkCombo.currentItem = checkIdx >= 0 ? checkIdx : 0;
-      }
-
-      var compLblTag = new Label( setupPanel );
-      compLblTag.text          = "Comp:";
-      compLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
-      compLblTag.setFixedWidth( 110 );
-
-      this.compCombo = new ComboBox( setupPanel );
-      this.compCombo.setMinWidth( 160 );
-      this.compCombo.toolTip = "Comparison star — select from non-blended V-band stars in the loaded CSV";
-      this.compCombo.onItemSelected = function( idx ) {
-         if ( idx < 0 || idx >= _compStars.length ) return;
-         var newCompLabel  = _compStars[ idx ].label;
-         var prevCheckLabel = ( _checkStars.length > 0 && self.checkCombo.currentItem >= 0 )
-                              ? _checkStars[ self.checkCombo.currentItem ].label : null;
-         _checkStars = _csvUsable.filter( function(s) { return s.label !== newCompLabel; } );
-         fillCombo( self.checkCombo, _checkStars );
-         var keepIdx = prevCheckLabel
-            ? _checkStars.findIndex( function(s) { return s.label === prevCheckLabel; } ) : -1;
-         self.checkCombo.currentItem = keepIdx >= 0 ? keepIdx : 0;
-      };
-
-      var checkLblTag = new Label( setupPanel );
-      checkLblTag.text          = "Check:";
-      checkLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
-
-      this.checkCombo = new ComboBox( setupPanel );
-      this.checkCombo.setMinWidth( 160 );
-      this.checkCombo.toolTip = "Check star — must differ from comp; used as independent quality indicator";
-      this.checkCombo.onItemSelected = function( idx ) {
-         if ( idx < 0 || idx >= _checkStars.length ) return;
-         var newCheckLabel  = _checkStars[ idx ].label;
-         var prevCompLabel  = ( _compStars.length > 0 && self.compCombo.currentItem >= 0 )
-                              ? _compStars[ self.compCombo.currentItem ].label : null;
-         _compStars = _csvUsable.filter( function(s) { return s.label !== newCheckLabel; } );
-         fillCombo( self.compCombo, _compStars );
-         var keepIdx = prevCompLabel
-            ? _compStars.findIndex( function(s) { return s.label === prevCompLabel; } ) : -1;
-         self.compCombo.currentItem = keepIdx >= 0 ? keepIdx : 0;
-      };
-
-      if ( _csvPath && File.exists( _csvPath ) ) {
-         try {
-            var _initStars = loadComparisonStars( _csvPath );
-            populateStarCombos( _initStars.filter( s => !s.blended ) );
-         } catch(e) { /* silently ignore — error will surface at Run */ }
-      }
-
-      var compRow = new HorizontalSizer;
-      compRow.spacing = 8;
-      compRow.add( compLblTag       );
-      compRow.add( this.compCombo   );
-      compRow.addSpacing( 12 );
-      compRow.add( checkLblTag      );
-      compRow.add( this.checkCombo  );
-      compRow.addStretch();
 
       var obscodeLblTag = new Label( setupPanel );
       obscodeLblTag.text          = "Observer code:";
@@ -1156,13 +1090,109 @@ class PhotometryDialog extends Dialog {
       setupSizer.addSpacing( 8 );
       setupSizer.add( imageRow   );
       setupSizer.add( csvRow     );
-      setupSizer.add( compRow    );
       setupSizer.add( obscodeRow );
       setupSizer.addStretch();
       setupPanel.sizer = setupSizer;
 
       // ============================================================
-      // Step 1 — Run Photometry
+      // Step 1 — Comp Stars
+      // ============================================================
+
+      var compStarsPanel = new Control( this );
+      compStarsPanel.visible = false;
+
+      var discoveryLbl = new Label( compStarsPanel );
+      discoveryLbl.text = "Click 'Next ›' from Setup to run discovery.";
+
+      this.compTreeBox = new TreeBox( compStarsPanel );
+      this.compTreeBox.numberOfColumns  = 5;
+      this.compTreeBox.rootDecoration   = false;
+      this.compTreeBox.alternateRowColor = true;
+      this.compTreeBox.setHeaderText( 0, "Comp" );
+      this.compTreeBox.setHeaderText( 1, "Label" );
+      this.compTreeBox.setHeaderText( 2, "V mag" );
+      this.compTreeBox.setHeaderText( 3, "Δ mag" );
+      this.compTreeBox.setHeaderText( 4, "Notes" );
+      this.compTreeBox.setColumnWidth( 0, 40  );
+      this.compTreeBox.setColumnWidth( 1, 55  );
+      this.compTreeBox.setColumnWidth( 2, 60  );
+      this.compTreeBox.setColumnWidth( 3, 60  );
+      this.compTreeBox.setMinHeight( 160 );
+      this.compTreeBox.toolTip =
+         "Click any row to toggle it as a comparison star.\n" +
+         "✓ = selected as comp.  — = not selected.\n" +
+         "Pre-ticked stars are recommended based on magnitude proximity and PSF quality.";
+      this.compTreeBox.onNodeClicked = function( node, col ) {
+         node.isCompSelected = !node.isCompSelected;
+         node.setText( 0, node.isCompSelected ? "✓" : "—" );
+         _ensembleEntries = [];
+         for ( var i = 0; i < self.compTreeBox.numberOfChildren; ++i ) {
+            var n = self.compTreeBox.child( i );
+            if ( n.isCompSelected && n._entry ) _ensembleEntries.push( n._entry );
+         }
+         updateCheckCombo();
+         updateCompCount();
+      };
+
+      var checkLblTag2 = new Label( compStarsPanel );
+      checkLblTag2.text          = "Check star:";
+      checkLblTag2.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+      checkLblTag2.setFixedWidth( 80 );
+
+      this.checkCombo = new ComboBox( compStarsPanel );
+      this.checkCombo.setMinWidth( 160 );
+      this.checkCombo.toolTip = "Check star — measured independently; excluded from the comp ensemble";
+      this.checkCombo.onItemSelected = function( idx ) {
+         if ( idx >= 0 && idx < _checkEligible.length )
+            _checkStar = _checkEligible[ idx ].star;
+      };
+
+      var checkRow2 = new HorizontalSizer;
+      checkRow2.spacing = 8;
+      checkRow2.add( checkLblTag2    );
+      checkRow2.add( this.checkCombo );
+      checkRow2.addStretch();
+
+      var compCountLbl = new Label( compStarsPanel );
+      compCountLbl.text = "";
+
+      function updateCompCount() {
+         var n = _ensembleEntries.length;
+         compCountLbl.text = n === 0
+            ? "No comp stars selected — select at least one."
+            : n + " comp star" + (n === 1 ? "" : "s") + " selected.";
+         updateStepNav();
+      }
+
+      function updateCheckCombo() {
+         var selectedLabels = {};
+         _ensembleEntries.forEach( function(e) { selectedLabels[ e.star.label ] = true; } );
+         _checkEligible = _allInFrame.filter( function(e) {
+            return !selectedLabels[ e.star.label ] && e.instMag !== null;
+         });
+         var prevLabel = _checkStar ? _checkStar.label : null;
+         while ( self.checkCombo.numberOfItems > 0 ) self.checkCombo.removeItem( 0 );
+         _checkEligible.forEach( function(e) {
+            self.checkCombo.addItem( e.star.label + "  (" + format( "%.3f", e.star.magV ) + " V)" );
+         });
+         var keepIdx = prevLabel
+            ? _checkEligible.findIndex( function(e) { return e.star.label === prevLabel; } ) : -1;
+         var selIdx = keepIdx >= 0 ? keepIdx : 0;
+         self.checkCombo.currentItem = selIdx;
+         _checkStar = ( _checkEligible.length > 0 ) ? _checkEligible[ selIdx ].star : null;
+      }
+
+      var compStarsSizer = new VerticalSizer;
+      compStarsSizer.spacing = 8;
+      compStarsSizer.add( discoveryLbl );
+      compStarsSizer.add( self.compTreeBox, 100 );
+      compStarsSizer.add( checkRow2   );
+      compStarsSizer.add( compCountLbl );
+      compStarsSizer.addStretch();
+      compStarsPanel.sizer = compStarsSizer;
+
+      // ============================================================
+      // Step 2 — Run Photometry
       // ============================================================
 
       var runPanel = new Control( this );
@@ -1252,7 +1282,7 @@ class PhotometryDialog extends Dialog {
       runPanel.sizer = runPanelSizer;
 
       // ============================================================
-      // Step 2 — Mid-time
+      // Step 3 — Mid-time
       // All timing controls parented to midtimePanel so hiding the panel
       // hides all children (Qt parent-child visibility cascade).
       // Mid-time RadioButtons are parented to midtimePanel — this makes them
@@ -1570,7 +1600,7 @@ class PhotometryDialog extends Dialog {
       midtimePanel.sizer = midtimeSizer;
 
       // ============================================================
-      // Step 3 — Verification image
+      // Step 4 — Verification image
       // ============================================================
 
       var verifyPanel = new Control( this );
@@ -1646,7 +1676,7 @@ class PhotometryDialog extends Dialog {
       verifyPanel.sizer = verifyPanelSizer;
 
       // ============================================================
-      // Step 4 — Report
+      // Step 5 — Report
       // Format RadioButtons parented to fmtGrp (child of reportPanel),
       // so they form a separate exclusive group from the mid-time radios.
       // ============================================================
@@ -1761,10 +1791,11 @@ class PhotometryDialog extends Dialog {
 
       var STEP_NAMES = [
          "1   Setup",
-         "2   Photometry",
-         "3   Mid-time",
-         "4   Verification",
-         "5   Report"
+         "2   Comp Stars",
+         "3   Photometry",
+         "4   Mid-time",
+         "5   Verification",
+         "6   Report"
       ];
 
       STEP_NAMES.forEach( function( name, idx ) {
@@ -1850,7 +1881,7 @@ class PhotometryDialog extends Dialog {
 
       this.nextBtn = new PushButton( this );
       this.nextBtn.onClick = function() {
-         if ( _currentStep === 4 ) self.cancel();
+         if ( _currentStep === 5 ) self.cancel();
          else activateStep( _currentStep + 1 );
       };
 
@@ -1865,6 +1896,7 @@ class PhotometryDialog extends Dialog {
       var rightCol = new VerticalSizer;
       rightCol.spacing = 0;
       rightCol.add( setupPanel,      100 );
+      rightCol.add( compStarsPanel,  100 );
       rightCol.add( runPanel,        100 );
       rightCol.add( midtimePanel,    100 );
       rightCol.add( verifyPanel,     100 );
@@ -1890,14 +1922,163 @@ class PhotometryDialog extends Dialog {
       this.sizer.add( contentRow, 100 );
 
       // ============================================================
-      // Photometry logic — runs when Run Photometry is clicked
+      // Discovery — PSF-fits all in-frame V-band stars + target;
+      // populates _allInFrame, _targetPix, _targetPSF, TreeBox.
+      // Runs automatically on entering the Comp Stars step.
+      // ============================================================
+
+      function runDiscovery() {
+         _discoveryDone   = false;
+         _photDone        = false;
+         _allInFrame      = [];
+         _ensembleEntries = [];
+         _instMag_Cs      = [];
+         _checkEligible   = [];
+         _targetPix       = null;
+         _targetPSF       = null;
+
+         self.compTreeBox.clear();
+         discoveryLbl.text = "Running discovery…";
+         updateCompCount();
+         updateStepNav();
+
+         _window = ImageWindow.activeWindow;
+         if ( !_window || _window.isNull )
+            throw new Error( "No active image window. Open a plate-solved OSC stack first." );
+
+         if ( !_csvPath || !File.exists( _csvPath ) )
+            throw new Error( "Comparison CSV not found — use Browse in Setup to select it." );
+
+         console.writeln( SEP );
+         console.writeln( TITLE + " v" + VERSION + " — Discovery" );
+         console.writeln( SEP );
+
+         // Astrometry
+         var metadata = loadAstrometry( _window );
+         var image    = _window.mainView.image;
+         self.imageLbl.text = _window.mainView.id;
+
+         // Project target
+         _targetPix = celestialToPixel( metadata, TARGET.ra, TARGET.dec );
+         if ( !_targetPix || _targetPix.x < 0 || _targetPix.y < 0 ||
+              _targetPix.x >= image.width || _targetPix.y >= image.height )
+            throw new Error( TARGET.name + " is outside the image frame." );
+
+         // Load comparison stars and project in-frame ones
+         var allStars   = loadComparisonStars( _csvPath );
+         var nonBlended = allStars.filter( function(s) { return !s.blended; } );
+         allStars.filter( function(s) { return s.blended; } ).forEach( function(s) {
+            console.warningln( "Excluded (blended): " + s.label + " (" + s.auid + ") — " + s.comments );
+         });
+
+         var inFrame = [];
+         nonBlended.forEach( function(s) {
+            var pix = celestialToPixel( metadata, s.ra, s.dec );
+            if ( pix && pix.x >= 0 && pix.y >= 0 &&
+                 pix.x < image.width && pix.y < image.height )
+               inFrame.push( { star: s, x: pix.x, y: pix.y } );
+         });
+
+         console.writeln( "V-band stars in frame: " + inFrame.length +
+                          " of " + nonBlended.length + " (non-blended)" );
+         if ( inFrame.length === 0 )
+            throw new Error( "No non-blended V-band comparison stars in frame." );
+
+         // PSF measurement — target + all in-frame candidates in one pass
+         var psfInput = [ { label: TARGET.name, x: _targetPix.x, y: _targetPix.y } ];
+         inFrame.forEach( function(e) {
+            psfInput.push( { label: e.star.label, x: e.x, y: e.y } );
+         });
+         var psfFits = fitPSF( _window, psfInput );
+
+         _targetPSF = psfFits[ TARGET.name ];
+         var targetReject = checkPSFQuality( _targetPSF, _targetPix.x, _targetPix.y );
+         if ( targetReject )
+            throw new Error( TARGET.name + " PSF rejected: " + targetReject );
+
+         function psfLine( psf ) {
+            if ( !psf ) return "fit failed";
+            return format( "A=%.4f B=%.4f sx=%.2f sy=%.2f MAD=%.5f  centre(%.1f,%.1f)",
+                           psf.A, psf.B, psf.sx, psf.sy, psf.mad, psf.cx, psf.cy );
+         }
+         console.writeln( "PSF — " + TARGET.name + ": " + psfLine( _targetPSF ) );
+
+         // Build _allInFrame
+         inFrame.forEach( function(e) {
+            var psf     = psfFits[ e.star.label ];
+            var qMsg    = checkPSFQuality( psf, e.x, e.y );
+            var instMag = ( !qMsg && psf ) ? psfInstrumentalMag( psf ) : null;
+            var delta   = Math.abs( e.star.magV - TARGET.magQuiescence );
+            var notes;
+            if      ( qMsg )                        notes = qMsg;
+            else if ( instMag === null )            notes = "flux zero";
+            else if ( delta > ENSEMBLE_MAX_DELTA_MAG )
+                                                    notes = format( "%.1f", delta ) + " mag from target";
+            else                                    notes = "OK";
+            var recommended = ( !qMsg && instMag !== null && delta <= ENSEMBLE_MAX_DELTA_MAG );
+            _allInFrame.push({
+               star       : e.star,
+               x          : e.x,
+               y          : e.y,
+               psf        : psf,
+               instMag    : instMag,
+               qualityMsg : qMsg || null,
+               deltaMag   : delta,
+               recommended: recommended,
+               notes      : notes
+            });
+            console.writeln( "  " + e.star.label + " (" + format("%.3f",e.star.magV) + " V)" +
+                             "  " + psfLine(psf) + "  -> " + notes );
+         });
+
+         // Sort: recommended first, then by proximity to target mag
+         _allInFrame.sort( function(a,b) {
+            if ( a.recommended !== b.recommended ) return a.recommended ? -1 : 1;
+            return a.deltaMag - b.deltaMag;
+         });
+
+         // Default selection: top recommended stars, capped at ENSEMBLE_DEFAULT_MAX_N
+         var recommended = _allInFrame.filter( function(e) { return e.recommended; } );
+         var defSelected = recommended.slice( 0, ENSEMBLE_DEFAULT_MAX_N );
+         var selectedLabels = {};
+         defSelected.forEach( function(e) { selectedLabels[ e.star.label ] = true; } );
+         _ensembleEntries = defSelected.slice();
+
+         // Populate TreeBox
+         self.compTreeBox.clear();
+         _allInFrame.forEach( function(e) {
+            var node = new TreeBoxNode( self.compTreeBox );
+            node.isCompSelected = !!selectedLabels[ e.star.label ];
+            node._entry = e;
+            node.setText( 0, node.isCompSelected ? "✓" : "—" );
+            node.setText( 1, e.star.label );
+            node.setText( 2, format( "%.3f", e.star.magV ) );
+            node.setText( 3, format( "+%.2f", e.deltaMag ) );
+            node.setText( 4, e.notes );
+         });
+
+         updateCheckCombo();
+         updateCompCount();
+
+         discoveryLbl.text = inFrame.length + " V-band stars in frame.  " +
+            _ensembleEntries.length + " pre-selected as comp.  " +
+            "Click rows to toggle.";
+
+         _discoveryDone = true;
+         updateStepNav();
+      }
+
+      // ============================================================
+      // Photometry — uses cached PSF from discovery; ensemble math.
+      // Runs automatically on entering the Photometry step.
       // ============================================================
 
       function runPhotometry() {
          _photDone        = false;
          _instMag_T       = null;
-         _instMag_C       = null;
+         _instMag_Cs      = [];
          _instMag_K       = null;
+         _ensembleZP      = NaN;
          _checkGateWarn   = false;
          self.magLbl.text           = "—";
          self.merrLbl.text          = "—";
@@ -1906,9 +2087,10 @@ class PhotometryDialog extends Dialog {
          self.checkGateLbl.visible  = false;
          checkWriteEnabled();
 
-         _window = ImageWindow.activeWindow;
-         if ( !_window || _window.isNull )
-            throw new Error( "No active image window. Open a plate-solved OSC stack and make it the active window first." );
+         if ( !_discoveryDone || _targetPSF === null )
+            throw new Error( "Run discovery first (go back to the Comp Stars step)." );
+         if ( _ensembleEntries.length === 0 )
+            throw new Error( "No comparison stars selected. Tick at least one in the Comp Stars step." );
 
          // Check FITS HISTORY keywords for forbidden processes
          var forbidden = detectForbiddenHistory( _window );
@@ -1922,18 +2104,16 @@ class PhotometryDialog extends Dialog {
             self.warningLbl.visible = false;
          }
 
-         // Heuristic linearity checks: green-channel median + historyIndex.
-         // Supplementary signals only — never block; shown in addition to HISTORY warnings.
+         // Heuristic linearity checks
          var img = _window.mainView.image;
          var prevChannel = img.selectedChannel;
-         img.selectedChannel = 1;   // green channel
+         img.selectedChannel = 1;
          var greenMedian = img.median();
          img.selectedChannel = prevChannel;
          console.writeln( "Green channel median: " + format( "%.4f", greenMedian ) );
 
          var histIdx = _window.mainView.historyIndex;
          var linearityMsgs = [];
-
          if ( greenMedian > 0.15 ) {
             linearityMsgs.push(
                "<font color='#cc4400'>⚠  Green median " + format( "%.4f", greenMedian ) +
@@ -1945,7 +2125,6 @@ class PhotometryDialog extends Dialog {
                " is in the ambiguous range — verify the stack is unstretched.</font>"
             );
          }
-
          if ( histIdx > 0 && forbidden.length === 0 ) {
             linearityMsgs.push(
                "<font color='#997700'>⚠  Image has " + histIdx + " unsaved edit" +
@@ -1954,7 +2133,6 @@ class PhotometryDialog extends Dialog {
                "&nbsp;&nbsp;&nbsp;Save to disk for reliable detection.</font>"
             );
          }
-
          if ( linearityMsgs.length > 0 ) {
             self.linearityLbl.text    = "<b>" + linearityMsgs.join( "<br/>" ) + "</b>";
             self.linearityLbl.visible = true;
@@ -1962,26 +2140,20 @@ class PhotometryDialog extends Dialog {
             self.linearityLbl.visible = false;
          }
 
-         // Populate observer site fields from FITS keywords (only if the field is
-         // currently blank or was set by a previous FITS read — never overwrite a
-         // value the user has typed manually by checking if the field changed).
+         // Observer site fields (pre-fill from FITS if not already set)
          var siteKw = readSiteCoords( _window.keywords );
          if ( siteKw.lat  !== null ) self.latEdit.text  = format( "%.4f", siteKw.lat  );
          if ( siteKw.lon  !== null ) self.lonEdit.text  = format( "%.4f", siteKw.lon  );
          self.elevEdit.text = ( siteKw.elev !== null )
             ? format( "%.0f", siteKw.elev ) : ( self.elevEdit.text || "0" );
 
-         // Read stack metadata from FITS keywords.
-         var _kws   = _window.keywords;
+         // Frame count from FITS/XISF properties
+         var _kws    = _window.keywords;
          var expFits = findKeyword( _kws, "EXPTIME" );
-
-         // Frame count: PCL:TotalExposureTime / Instrument:FrameExposureTime (both in seconds).
-         // Falls back to NCOMBINE FITS keyword for non-PixInsight stacks.
-         var _mv       = _window.mainView;
+         var _mv     = _window.mainView;
          var _totalExp = _mv.propertyValue( "PCL:TotalExposureTime" );
          var _frameExp = _mv.propertyValue( "Instrument:FrameExposureTime" );
          if ( _totalExp !== null && _frameExp !== null ) {
-            // TotalExposureTime is a per-channel array e.g. [554.575,532.567,480.99]
             var _totNums = String( _totalExp ).replace( /[\[\]\s]/g, '' )
                               .split( ',' ).map( parseFloat )
                               .filter( function(x) { return !isNaN(x); } );
@@ -1998,189 +2170,125 @@ class PhotometryDialog extends Dialog {
             if ( !isNaN(expVal) ) self.exptimeEdit.text = format( "%.1f", expVal );
          }
 
-         if ( !_csvPath || !File.exists( _csvPath ) )
-            throw new Error( "Comparison CSV not found — use Browse to select it." );
-
+         var N = _ensembleEntries.length;
          console.writeln( SEP );
-         console.writeln( TITLE + " v" + VERSION + " — Run Photometry" );
+         console.writeln( TITLE + " v" + VERSION + " — Photometry (" +
+                          N + " comp star" + (N === 1 ? "" : "s") + ")" );
          console.writeln( SEP );
 
-         // Astrometry
-         var metadata = loadAstrometry( _window );
-         var image    = _window.mainView.image;
-         self.imageLbl.text = _window.mainView.id;   // clears red "(no active window)" if shown
-         console.writeln( "Astrometric solution loaded (" +
-                          image.width + " x " + image.height + " px)." );
-         console.writeln( format( "Observer site: lat %ls°  lon %ls°  elev %ls m  (%ls)",
-                                  self.latEdit.text  || "not set",
-                                  self.lonEdit.text  || "not set",
-                                  self.elevEdit.text || "0",
-                                  (siteKw.lat !== null) ? "from FITS" : "not in FITS — enter manually" ) );
-
-         // Comparison CSV
-         var allStars = loadComparisonStars( _csvPath );
-         var usable   = allStars.filter( s => !s.blended );
-         var blended  = allStars.filter( s =>  s.blended );
-         console.writeln( "Comparison stars: " + allStars.length + " V-band rows from " +
-                          File.extractName( _csvPath ) );
-         blended.forEach( s =>
-            console.warningln( "  Excluded (blended): label " + s.label +
-                               " (" + s.auid + ") — " + s.comments )
-         );
-
-         // Refresh ComboBoxes and read selected comp/check stars
-         populateStarCombos( usable );
-         var compStar  = _compStars[ self.compCombo.currentItem  ];
-         var checkStar = _checkStars[ self.checkCombo.currentItem ];
-         if ( !compStar  ) throw new Error( "No comparison star selected." );
-         if ( !checkStar ) throw new Error( "No check star selected." );
-
-         self.compCheckLbl.text =
-            "Comparison star: " + compStar.label + " (" + format( "%.3f", compStar.magV ) + " V)" +
-            "    Check star: " + checkStar.label + " (" + format( "%.3f", checkStar.magV ) + " V)";
-
-         // Project to pixels
-         var targetPix = celestialToPixel( metadata, TARGET.ra, TARGET.dec );
-         if ( !targetPix )
-            throw new Error( TARGET.name + " is outside the image projection." );
-         if ( targetPix.x < 0 || targetPix.y < 0 ||
-              targetPix.x >= image.width || targetPix.y >= image.height )
-            throw new Error( TARGET.name + " projects outside the image frame." );
-
-         var compPix  = celestialToPixel( metadata, compStar.ra,  compStar.dec  );
-         var checkPix = celestialToPixel( metadata, checkStar.ra, checkStar.dec );
-         if ( !compPix || compPix.x < 0 || compPix.y < 0 ||
-              compPix.x >= image.width || compPix.y >= image.height )
-            throw new Error( "Comparison star " + compStar.label + " is outside the image frame." );
-         if ( !checkPix || checkPix.x < 0 || checkPix.y < 0 ||
-              checkPix.x >= image.width || checkPix.y >= image.height )
-            throw new Error( "Check star " + checkStar.label + " is outside the image frame." );
-
-         console.writeln( TARGET.name + " -> pixel (" + targetPix.x.toFixed(1) +
-                          ", " + targetPix.y.toFixed(1) + ")" );
-         console.writeln( "Comp  " + compStar.label  + " -> pixel (" +
-                          compPix.x.toFixed(1)  + ", " + compPix.y.toFixed(1)  + ")" );
-         console.writeln( "Check " + checkStar.label + " -> pixel (" +
-                          checkPix.x.toFixed(1) + ", " + checkPix.y.toFixed(1) + ")" );
-
-         // PSF measurement
-         var psfInput = [
-            { label: TARGET.name,      x: targetPix.x, y: targetPix.y },
-            { label: compStar.label,   x: compPix.x,   y: compPix.y   },
-            { label: checkStar.label,  x: checkPix.x,  y: checkPix.y  },
-         ];
-         var psfFits  = fitPSF( _window, psfInput );
-
-         var targetPSF = psfFits[ TARGET.name     ];
-         var compPSF   = psfFits[ compStar.label  ];
-         var checkPSF  = psfFits[ checkStar.label ];
-
-         var targetReject = checkPSFQuality( targetPSF, targetPix.x, targetPix.y );
-         var compReject   = checkPSFQuality( compPSF,   compPix.x,   compPix.y   );
-         var checkReject  = checkPSFQuality( checkPSF,  checkPix.x,  checkPix.y  );
-
-         if ( targetReject )
-            throw new Error( TARGET.name + " PSF rejected: " + targetReject );
-         if ( compReject )
-            throw new Error( "Comp " + compStar.label + " PSF rejected: " + compReject );
-         if ( checkReject )
-            console.warningln( "Check " + checkStar.label + " PSF rejected: " + checkReject +
-                               " — MERR will be unreliable." );
-
-         function psfLine( psf ) {
-            if ( !psf ) return "fit failed";
-            return format( "A=%.4f B=%.4f sx=%.2f sy=%.2f MAD=%.5f  centre(%.1f,%.1f)",
-                           psf.A, psf.B, psf.sx, psf.sy, psf.mad, psf.cx, psf.cy );
-         }
-         console.writeln( "PSF fits (green channel):" );
-         console.writeln( "  " + TARGET.name + ":       " + psfLine( targetPSF ) );
-         console.writeln( "  comp  " + compStar.label  + ":  " + psfLine( compPSF  ) );
-         console.writeln( "  check " + checkStar.label + ":  " + psfLine( checkPSF ) );
-
-         // Verification image — embedded in the right panel
-         _verifyArgs = {
-            win       : _window,
-            targetPix : targetPix,
-            compStar  : compStar,
-            compPix   : compPix,
-            checkStar : checkReject ? null : checkStar,
-            checkPix  : checkReject ? null : checkPix,
-         };
-         _verifyBmp = createVerificationImage(
-            _verifyArgs.win, _verifyArgs.targetPix,
-            _verifyArgs.compStar, _verifyArgs.compPix,
-            _verifyArgs.checkStar, _verifyArgs.checkPix,
-            _verifyStretch
-         );
-         updateVerifyBitmap();
-
-         // Photometry math
-         _instMag_T = psfInstrumentalMag( targetPSF );
-         _instMag_C = psfInstrumentalMag( compPSF   );
-         _instMag_K = checkPSF ? psfInstrumentalMag( checkPSF ) : null;
-
+         // Target instrumental magnitude (from cached discovery PSF)
+         _instMag_T = psfInstrumentalMag( _targetPSF );
          if ( _instMag_T === null )
-            throw new Error( TARGET.name + ": flux zero or negative — cannot compute magnitude." );
-         if ( _instMag_C === null )
-            throw new Error( "Comp " + compStar.label + ": flux zero or negative — cannot compute magnitude." );
+            throw new Error( TARGET.name + ": flux zero or negative." );
 
-         _tcrb_mag = compStar.magV + ( _instMag_T - _instMag_C );
+         // Ensemble zero-point: ZP_i = magV_i - instMag_i;  ZP = mean(ZP_i)
+         var zpValues = [];
+         _instMag_Cs  = [];
+         _ensembleEntries.forEach( function(e) {
+            var im = e.instMag;   // cached from discovery PSF
+            _instMag_Cs.push( im );
+            if ( im !== null ) zpValues.push( e.star.magV - im );
+         });
 
-         // Store for report generator
-         _compStar  = compStar;
-         _checkStar = checkStar;
+         if ( zpValues.length === 0 )
+            throw new Error( "None of the selected comp stars produced a valid flux." );
 
-         // MERR: propagate per-star PSF noise in quadrature (Poisson + sky background)
-         var sigT = psfMagError( targetPSF );
-         var sigC = psfMagError( compPSF   );
-         var sigK = (_instMag_K !== null) ? psfMagError( checkPSF ) : null;
-         if ( sigT !== null && sigC !== null ) {
-            _merr = Math.sqrt( sigT * sigT + sigC * sigC );
+         _ensembleZP = zpValues.reduce( function(a,b) { return a+b; } ) / zpValues.length;
+         _tcrb_mag   = _ensembleZP + _instMag_T;
+
+         // MERR = sqrt(sigZP^2 + sigT^2)
+         var sigT  = psfMagError( _targetPSF );
+         var sigZP;
+         if ( zpValues.length >= 2 ) {
+            var zpMean = _ensembleZP;
+            var zpVar  = zpValues.reduce( function(acc,zp) {
+               return acc + (zp - zpMean) * (zp - zpMean);
+            }, 0 ) / zpValues.length;
+            sigZP = Math.sqrt( zpVar ) / Math.sqrt( zpValues.length );
+         } else {
+            sigZP = psfMagError( _ensembleEntries[0].psf );
+         }
+
+         if ( sigT !== null && sigZP !== null ) {
+            _merr = Math.sqrt( sigT * sigT + sigZP * sigZP );
          } else {
             _merr = 0.999;
             console.warningln( "MERR: PSF noise estimation failed — set to 0.999" );
          }
 
-         console.writeln( "Photometry:" );
-         console.writeln( format( "  %ls = %.3f TG   MERR = %.3f  (comp %ls, V = %.3f)",
-                                  TARGET.name, _tcrb_mag, _merr, compStar.label, compStar.magV ) );
+         // Console summary
+         console.writeln( format( "  %ls = %.3f TG   MERR = %.3f   ZP = %.4f",
+                                  TARGET.name, _tcrb_mag, _merr, _ensembleZP ) );
          console.writeln( "  inst T = " + format( "%.4f", _instMag_T ) +
-                          "  err=" + format( "%.3f", sigT || 0 ) +
-                          "   inst C = " + format( "%.4f", _instMag_C ) +
-                          "  err=" + format( "%.3f", sigC || 0 ) +
-                          "   inst K = " + ((_instMag_K !== null) ? format( "%.4f", _instMag_K ) : "n/a") +
-                          ((sigK !== null) ? "  err=" + format( "%.3f", sigK ) : "") );
+                          "  sigT=" + ( sigT !== null ? format("%.4f",sigT) : "n/a" ) );
+         _ensembleEntries.forEach( function(e, i) {
+            console.writeln( "  comp " + e.star.label + ": inst=" + format("%.4f",_instMag_Cs[i]) +
+                             "  V=" + format("%.3f",e.star.magV) +
+                             "  ZP=" + format("%.4f", zpValues[i]) );
+         });
 
-         // Check-star quality gate — independent of MERR
-         if ( _instMag_K !== null ) {
-            var checkStd = compStar.magV + ( _instMag_K - _instMag_C );
-            var checkDev = Math.abs( checkStd - checkStar.magV );
-            console.writeln( "  Check star: derived " + format( "%.3f", checkStd ) +
-                             " vs catalogue V=" + format( "%.3f", checkStar.magV ) +
-                             " -> deviation " + format( "%.3f", checkDev ) + " mag" );
+         // Check star (from _allInFrame cache; no second PSF fit)
+         var checkEntry = _checkStar
+            ? _allInFrame.find( function(e) { return e.star.label === _checkStar.label; } )
+            : null;
+         var checkPix    = checkEntry ? { x: checkEntry.x, y: checkEntry.y } : null;
+         var checkReject = checkEntry ? checkEntry.qualityMsg : null;
+         _instMag_K = ( checkEntry && !checkReject ) ? checkEntry.instMag : null;
+
+         // Verification image (baked into _verifyArgs for reRenderVerify)
+         _verifyArgs = {
+            win         : _window,
+            targetPix   : _targetPix,
+            compEntries : _ensembleEntries,
+            checkStar   : checkReject ? null : _checkStar,
+            checkPix    : checkReject ? null : checkPix,
+         };
+         _verifyBmp = createVerificationImage(
+            _verifyArgs.win, _verifyArgs.targetPix,
+            _verifyArgs.compEntries,
+            _verifyArgs.checkStar, _verifyArgs.checkPix,
+            _verifyStretch
+         );
+         updateVerifyBitmap();
+
+         // Check-star quality gate
+         if ( _instMag_K !== null && _checkStar ) {
+            var checkStd = _ensembleZP + _instMag_K;
+            var checkDev = Math.abs( checkStd - _checkStar.magV );
+            console.writeln( "  Check " + _checkStar.label + ": derived " + format("%.3f",checkStd) +
+                             "  catalogue V=" + format("%.3f",_checkStar.magV) +
+                             "  deviation " + format("%.3f",checkDev) );
             if ( checkDev > 3.0 * _merr ) {
                _checkGateWarn = true;
-               console.warningln( "  Check star deviation (" + format( "%.3f", checkDev ) +
-                                  ") is > 3x MERR (" + format( "%.3f", _merr ) +
-                                  ") -- possible systematic error." );
+               console.warningln( "  Check star deviation > 3x MERR — possible systematic error." );
                self.checkGateLbl.text =
-                  "<b><font color='#cc6600'>⚠  Check star " + escHtml( checkStar.label ) +
+                  "<b><font color='#cc6600'>⚠  Check star " + escHtml( _checkStar.label ) +
                   ": deviation " + format( "%.3f", checkDev ) + " mag" +
-                  " &gt; 3× MERR (" + format( "%.3f", _merr ) + ")<br/>" +
+                  " &gt; 3\xd7 MERR (" + format( "%.3f", _merr ) + ")<br/>" +
                   "Possible systematic error — wrong star, blending, or atmospheric gradient." +
                   "</font></b>";
                self.checkGateLbl.visible = true;
             }
          }
 
-         // Update results display
+         // Update Photometry step display
+         var cname = N === 1
+            ? _ensembleEntries[0].star.label + " (" + format("%.3f",_ensembleEntries[0].star.magV) + " V)"
+            : "ENSEMBLE (" + N + " stars)";
+         self.compCheckLbl.text =
+            "Comp: " + cname + "    Check: " +
+            ( _checkStar ? _checkStar.label + " (" + format("%.3f",_checkStar.magV) + " V)" : "none" );
+
          self.magLbl.text  = format( "%.3f", _tcrb_mag );
          self.merrLbl.text = format( "%.3f", _merr );
-         self.instLbl.text =
-            TARGET.name + ": " + format( "%.4f", _instMag_T ) +
-            "    Comp " + compStar.label + ": " + format( "%.4f", _instMag_C ) +
-            "    Check " + checkStar.label + ": " +
-               ( (_instMag_K !== null) ? format( "%.4f", _instMag_K ) : "n/a" );
+
+         var instLine = TARGET.name + ": " + format( "%.4f", _instMag_T );
+         _ensembleEntries.forEach( function(e, i) {
+            instLine += "   " + e.star.label + ": " + format( "%.4f", _instMag_Cs[i] );
+         });
+         if ( _instMag_K !== null )
+            instLine += "   Check " + _checkStar.label + ": " + format( "%.4f", _instMag_K );
+         self.instLbl.text = instLine;
 
          _photDone = true;
          checkWriteEnabled();
@@ -2204,14 +2312,19 @@ class PhotometryDialog extends Dialog {
                amassStr = "na";
             }
          }
-         var kmag  = (_instMag_K !== null) ? format( "%.4f", _instMag_K ) : "na";
-         var stackInfo = "";
+         var kmag       = (_instMag_K !== null) ? format( "%.4f", _instMag_K ) : "na";
          var framesVal  = self.framesEdit.text.trim();
          var exptimeVal = self.exptimeEdit.text.trim();
+         var stackInfo  = "";
          if ( framesVal  ) stackInfo += framesVal + " frames";
          if ( exptimeVal ) stackInfo += (stackInfo ? " x " : "") + exptimeVal + "s";
-         var moonVal = self.moonLbl.text !== "—" ? "moon " + self.moonLbl.text : "";
-         var notes = "TG green channel; DynamicPSF; comp " + _compStar.label + "; check " + _checkStar.label
+         var moonVal    = self.moonLbl.text !== "—" ? "moon " + self.moonLbl.text : "";
+
+         var N = _ensembleEntries.length;
+         var compList = _ensembleEntries.map( function(e) { return e.star.label; } ).join("+");
+         var notes = "TG green channel; DynamicPSF"
+                   + "; comp " + compList
+                   + ( _checkStar ? "; check " + _checkStar.label : "" )
                    + (stackInfo ? "; " + stackInfo : "")
                    + (moonVal   ? "; " + moonVal   : "");
 
@@ -2228,10 +2341,11 @@ class PhotometryDialog extends Dialog {
          }
          var framesVal  = self.framesEdit.text.trim();
          var exptimeVal = self.exptimeEdit.text.trim();
-         var stackStr   = framesVal  ? framesVal + " frames" : "—";
-         if ( exptimeVal ) stackStr += " × " + exptimeVal + " s";
-         var bar = "=".repeat( 52 );
-         return [
+         var stackStr   = framesVal ? framesVal + " frames" : "—";
+         if ( exptimeVal ) stackStr += " x " + exptimeVal + " s";
+         var N    = _ensembleEntries.length;
+         var bar  = "=".repeat( 52 );
+         var lines = [
             bar,
             TITLE + " v" + VERSION + "  —  Observation Report",
             bar,
@@ -2246,20 +2360,34 @@ class PhotometryDialog extends Dialog {
             kv( "Moon",            self.moonLbl.text                                  ),
             kv( "Stack",           stackStr                                            ),
             "",
-            kv( "Comparison star", "label " + _compStar.label  + " / " + _compStar.auid  +
-                                   " / V = " + format( "%.3f", _compStar.magV  )     ),
-            kv( "  Inst. mag",     format( "%.4f", _instMag_C )                      ),
-            kv( "Check star",      "label " + _checkStar.label + " / " + _checkStar.auid +
-                                   " / V = " + format( "%.3f", _checkStar.magV )     ),
-            kv( "  Inst. mag",     kmag                                               ),
-            "",
-            kv( "Observer code",   self.obscodeEdit.text                              ),
-            kv( "Chart",           CHART                                              ),
-            kv( "Software",        TITLE + " v" + VERSION                             ),
-            kv( "Notes",           notes                                              ),
-            bar,
-            "",
-         ].join( "\n" );
+         ];
+         if ( N === 1 ) {
+            var e = _ensembleEntries[0];
+            lines.push( kv( "Comparison star", "label " + e.star.label + " / " + e.star.auid +
+                                               " / V = " + format( "%.3f", e.star.magV )  ) );
+            lines.push( kv( "  Inst. mag",     format( "%.4f", _instMag_Cs[0] )            ) );
+         } else {
+            lines.push( kv( "Ensemble (" + N + " comps)", "" ) );
+            _ensembleEntries.forEach( function(e, i) {
+               lines.push( "  " + e.star.label + " / " + e.star.auid +
+                           "  V=" + format("%.3f",e.star.magV) +
+                           "  inst=" + format("%.4f",_instMag_Cs[i]) );
+            });
+            lines.push( kv( "  Zero-point",    format( "%.4f", _ensembleZP )               ) );
+         }
+         if ( _checkStar ) {
+            lines.push( kv( "Check star",      "label " + _checkStar.label + " / " + _checkStar.auid +
+                                               " / V = " + format( "%.3f", _checkStar.magV )          ) );
+            lines.push( kv( "  Inst. mag",     kmag                                                    ) );
+         }
+         lines.push( "" );
+         lines.push( kv( "Observer code",   self.obscodeEdit.text ) );
+         lines.push( kv( "Chart",           CHART                 ) );
+         lines.push( kv( "Software",        TITLE + " v" + VERSION) );
+         lines.push( kv( "Notes",           notes                 ) );
+         lines.push( bar );
+         lines.push( "" );
+         return lines.join( "\n" );
       }
 
       function buildAavsoReport( midJD, amassStr, kmag, notes ) {
@@ -2271,19 +2399,21 @@ class PhotometryDialog extends Dialog {
             "#DATE=JD",
             "#OBSTYPE=" + OBSTYPE,
          ];
+         var N     = _ensembleEntries.length;
+         var cname = N === 1 ? sanitizeField( _ensembleEntries[0].star.auid ) : "ENSEMBLE";
+         var cmag  = N === 1 ? format( "%.4f", _instMag_Cs[0] ) : "na";
+         var kname = _checkStar ? sanitizeField( _checkStar.auid ) : "na";
          var dataLine = [
             TARGET.name,
             format( "%.6f", midJD      ),
             format( "%.3f", _tcrb_mag  ),
             format( "%.3f", _merr      ),
             "TG", "NO", "STD",
-            sanitizeField( _compStar.auid  ),   // from CSV
-            format( "%.4f", _instMag_C ),
-            sanitizeField( _checkStar.auid ),   // from CSV
-            kmag,
+            cname, cmag,
+            kname, kmag,
             amassStr,
             "na", CHART,
-            sanitizeField( notes ),             // contains CSV labels + FITS NCOMBINE
+            sanitizeField( notes ),
          ].join( "," );
          return headerLines.join( "\n" ) + "\n" + dataLine + "\n";
       }

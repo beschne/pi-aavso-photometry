@@ -295,6 +295,43 @@ var frames = Math.round( maxTot / parseFloat( String( frameExp ) ) );
 
 **`PixInsight:ProcessingHistory` is NOT loaded into the in-memory view.** It exists in the XISF file on disk (accessible via Python/XML parsing) but `view.propertyValue("PixInsight:ProcessingHistory")` returns `null`. Do not rely on it from PJSR.
 
+## TreeBox
+
+Verified against `FitsDataView.js` (bundled PI script).
+
+```js
+var tb = new TreeBox( parent );
+tb.numberOfColumns   = 5;        // property assignment — NOT setColumnCount()
+tb.rootDecoration    = false;    // hides the expand/collapse arrow for top-level nodes
+tb.alternateRowColor = true;
+tb.setHeaderText( 0, "Col 0" );  // setHeaderText(col, text) is the correct method
+tb.setHeaderText( 1, "Col 1" );
+tb.setColumnWidth( 0, 40 );      // setColumnWidth(col, pixels)
+tb.adjustColumnWidthToContents( 0 );  // auto-size after population
+tb.setMinHeight( 160 );
+
+var node = new TreeBoxNode( tb );  // creates and appends a top-level node
+node.setText( 0, "value" );        // node.setText(col, text)
+// node.text( col )                // getter for node text
+node.checkable = true;             // shows a native checkbox
+node.checked   = false;            // checkbox state
+
+// Custom JS properties can be attached freely:
+node.isCompSelected = true;
+node._entry = someObject;
+
+// Callbacks:
+tb.onNodeClicked = function( node, col ) { /* col = column index clicked */ };
+tb.onCurrentNodeUpdated = function( node ) { /* fires on selection change */ };
+
+// Traversal:
+tb.numberOfChildren;     // top-level node count
+tb.child( idx );         // top-level node at index idx
+tb.clear();              // remove all nodes
+```
+
+**Key gotcha:** `setColumnCount()` does NOT exist in PJSR. Use `numberOfColumns = n` (property).
+
 ## ComboBox
 
 ```js
