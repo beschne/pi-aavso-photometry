@@ -13,12 +13,16 @@ direkt in PixInsight durchführt und einen **AAVSO Extended File Format**-Berich
 Aktuell konfiguriert für **T Coronae Borealis** ("Blaze Star"), eine rekurrente Nova,
 die sich von Ruhelage (~10 mag) bis Ausbruch (~2 mag) um ~8 Größenklassen aufhellt.
 
+Das Skript misst in **zwei photometrischen Bändern pro Durchlauf** — TG (grüner Kanal,
+V-kalibriert) und TB (blauer Kanal, B-kalibriert) — und schreibt für jedes Band eine
+AAVSO-Beobachtungszeile.
+
 Das Skript nutzt die PixInsight-eigenen Werkzeuge — die astrometrische WCS-Lösung,
 FITS-Keywords und DynamicPSF — anstatt diese extern neu zu implementieren.
 
 Der Dialog ist ein sechsstufiger Assistent — Setup → Vergleichssterne → Photometrie → Mittlere Zeit → Verifikation → Bericht.
 
-![Setup-Schritt](screenshots/screenshot%2C%20v1.2.0%2C%20%281%29%20setup.png)
+![Setup-Schritt](screenshots/screenshot%2C%20v1.3.0%2C%20%281%29%20setup.png)
 ![Vergleichssterne-Schritt](screenshots/screenshot%2C%20v1.2.0%2C%20%282%29%20comp%20stars.png)
 
 ---
@@ -26,13 +30,14 @@ Der Dialog ist ein sechsstufiger Assistent — Setup → Vergleichssterne → Ph
 ## Voraussetzungen
 
 - **PixInsight 1.9.4 „Lockhart"** oder neuer (V8-JS-Engine erforderlich)
-- Ein geöffneter, plate-gesolvter OSC-RGB-Master-Light-Stack
+- Ein geöffneter, plate-gesolvter OSC-(One-Shot-Color-)RGB-Master-Light-Stack, debayert in PixInsight
 - Eine Vergleichsstern-CSV aus dem [AAVSO VSP](https://www.aavso.org/vsp)
 
 ## Vorbedingungen für das Eingabebild
 
 | Bedingung | Status |
 |-----------|--------|
+| Debayerter OSC-(One-Shot-Color-)RGB-Stack (3 Kanäle) | **Erforderlich** — TG und TB werden aus separaten Farbkanälen extrahiert; Graustufenbilder werden beim Start abgelehnt |
 | Linearer (ungestretchter) Stack | **Erforderlich** — PSF-Fluss ist auf einem gestretchten Bild nicht linear |
 | Plate-gesolvt (ImageSolver) | **Erforderlich** — Koordinatenprojektion benötigt die WCS-Lösung |
 | Stretch angewendet | **Inkompatibel** — zerstört PSF-Linearität |
@@ -100,8 +105,9 @@ auszuschalten. Den **Prüfstern** aus dem Dropdown am unteren Rand wählen.
 **Schritt 3 — Photometrie**
 
 Die Photometrie startet automatisch beim Öffnen dieses Schritts:
-- **Helligkeit** (TG-Band), **Filter: TG**, **Fehler (MERR)**
-- **Rohe PSF-Flüsse** — Instrumentalhelligkeiten für Ziel, Comp-Ensemble und Prüfstern
+- **TG**-Helligkeit und **MERR** — grüner Kanal, kalibriert gegen V-Band-Kataloghelligkeiten
+- **TB**-Helligkeit und **MERR** — blauer Kanal, kalibriert gegen B-Band-Kataloghelligkeiten (zeigt — nur wenn die blaue PSF fehlschlug; alle Sterne in einem Standard-AAVSO-VSP-Export enthalten B-Helligkeiten)
+- **TG PSF-Fluss** — Instrumentalhelligkeiten für Ziel, Comp-Ensemble und Prüfstern (grüner Kanal)
 - Rote Warnung bei erkannten inkompatiblen Prozessen in der Bildhistorie
 - Orange Warnung, wenn Prüfstern-Abweichung 3×MERR überschreitet
 
@@ -141,6 +147,29 @@ und mit Endung `.txt` speichern.
 
 T CrB erwartet man um ~8 Größenklassen heller — von Ruhelage (~10 V) bis Nova-Maximum (~2 V).
 
+### Warum TB für die Ausbruchserkennung am wichtigsten ist
+
+T CrB ist ein symbiotisches System: ein kühler M3-III-Roter Riese überträgt Masse auf einen
+Weißen Zwerg über eine Akkretionsscheibe. In Ruhelage dominiert der Rote Riese das kombinierte
+Licht. Bei zunehmender Akkretion vor und während des Ausbruchs hellen der heiße Weiße Zwerg
+und die Scheibe auf — und diese heiße Strahlung hat ihr Maximum im UV/Blauen.
+
+| Band | Kanal | Kalibriert gegen | M-Riesen-Beitrag in Ruhelage | Empfindlichkeit für WD/Scheiben-Aufhellung |
+|------|-------|-----------------|----------------------------|--------------------------------------------|
+| **TB** | Blau | B-Band-Comp-Mag | Gering (M3 III hat B−V ≈ +1,6) | **Höchste** |
+| **TG** | Grün | V-Band-Comp-Mag | Mittel | Mittel |
+| TR | Rot | Rc-Band-Comp-Mag | Dominant | Geringste |
+
+Der **TB−TG-Farbindex** approximiert B−V. In Ruhelage ist TB deutlich schwächer als TG,
+weil der M-Riese kaum blaues Licht aussendet. Wenn die heiße Komponente aufhellt, verringert
+sich dieser Abstand — TB hellt schneller auf als TG. Eine anhaltende Blauverschiebung in
+TB−TG (Index nähert sich null) kann ein Frühwarnsignal für erhöhte Akkretion oder
+Ausbruchsbeginn sein, möglicherweise bevor TG eine signifikante Helligkeitsänderung zeigt.
+
+TR wird daher nicht gemessen: In Ruhelage dominiert der rote Kanal überwältigend die
+M-Riesen-Photosphäre; der WD/Scheiben-Beitrag ist ein kleiner Bruchteil des gesamten
+Rc-Flusses, was TR zum unempfindlichsten Band für die Erkennung von Nova-Vorläufern macht.
+
 ### Phase 1 — Frühe Aufhellung (~7–9 mag): Comp/Check wechseln
 
 Karte **X42597QE** enthält hellere Vergleichssterne für diese Phase:
@@ -174,20 +203,22 @@ Belichtungsempfehlungen heraus — [aavso.org/news](https://www.aavso.org/news) 
 
 ## Bekannte Einschränkungen
 
-**TG-Band ≠ Johnson V.** Das Skript berichtet im **TG**-Band (Tricolor-Grün), nicht in
-Johnson V. TG ist für rote Sterne ~0,1–0,3 mag heller als V — relevant, da T CrB einen
-M3-III-Begleiter hat, der in Ruhelage dominiert. Der AAVSO-Bericht enthält korrekt
-`FILT=TG` und `TRANS=NO`. TG-Messungen dürfen niemals als V deklariert werden.
+**TG und TB ≠ Johnson V und B.** Das Skript berichtet in den Bändern **TG** (Tricolor-Grün)
+und **TB** (Tricolor-Blau), nicht in Johnson V oder B. OSC-Passbänder unterscheiden sich von
+Standard-Filterbandbreiten; TG ist für rote Sterne ~0,1–0,3 mag heller als V. Der AAVSO-Bericht
+enthält korrekt `FILT=TG` und `FILT=TB` mit `TRANS=NO`. TG- und TB-Messungen dürfen
+niemals als V bzw. B deklariert werden.
+
+**TB−TG ist kein kalibrierter B−V-Index.** Der Farbunterschied approximiert B−V qualitativ,
+trägt aber die kombinierten unkalibrierten Versätze beider Passbänder. Er eignet sich am
+besten als relativer Indikator für Farbveränderungen über die Zeit, nicht als absoluter
+Farbindex im Vergleich zu Standardphotometrie.
 
 **Seestar-Gesichtsfeld bei Nova-Maximum.** Der Seestar S50 Pro hat ein Gesichtsfeld von
 ~1,4° × 1,0°. Bei Maximum (~2 mag) liegen die nächsten geeigneten Vergleichssterne
 (1–4 mag) möglicherweise außerhalb dieses Fensters. In diesem Fall empfiehlt sich ein
 Weitwinkelinstrument, visuelle Beobachtung oder Ensemble-Photometrie mit schwächeren
-feldinternen Sternen (geplante Funktion).
-
-**Ensemble-Photometrie.** Das Skript verwendet standardmäßig mehrere Vergleichssterne
-(Ensemble). Im Schritt 2 einzelne Sterne per Klick ein- oder ausschalten. Wird nur ein
-Stern ausgewählt, entspricht das mathematisch der klassischen Einzelstern-Differenzphotometrie.
+feldinternen Sternen.
 
 **DATE-OBS bei gestackten Mastern unzuverlässig.** PixInsights `ImageIntegration`
 schreibt `DATE-OBS` als Mittelpunkt der Sub-Startzeiten ohne Belichtungsdauer.
@@ -202,7 +233,7 @@ aus echten Subframes zu setzen.
 |------------------|---------|--------|
 | *Kein aktives Bildfenster* | Kein Stack geöffnet oder nicht aktiv | Master-Stack öffnen und Titelleiste anklicken |
 | *Kein Plate-Solve* | Keine WCS-Lösung gefunden | `Skript > Astronomie > ImageSolver` auf den Stack anwenden |
-| *RGB-Bild (3 Kanäle) erwartet* | Bild ist in Graustufen oder Kanalextraktion | Vollständigen OSC-Master verwenden |
+| *Debayertes OSC-RGB-Bild erwartet …* | Bild ist Graustufen, Kanalextraktion oder un-debayerter Bayer-Raw | Zuerst den Debayer-Prozess in PixInsight anwenden, dann den vollständigen debayerten RGB-Master verwenden |
 | *Stern außerhalb des Bildfeldes* | Comp- oder Check-Stern-Label nicht im Sichtfeld | Anderes Label im Dropdown wählen |
 | *PSF abgelehnt — zu schwach* | Stern zu schwach für Gauß-Fit | Helleres Comp/Check-Label wählen |
 | *PSF abgelehnt — gesättigt* | Stern im Master beschnitten | Schwächeres Comp/Check-Label wählen oder Belichtung kürzen |
@@ -216,9 +247,11 @@ aus echten Subframes zu setzen.
 
 **Lesbare Zusammenfassung** (Standard): formatierter Textbericht für persönliche Unterlagen.
 
-**AAVSO Extended Format** (auf Anforderung): 15-Felder-CSV zur direkten Einreichung über das Formular
-[AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) (**File upload** auswählen). Schlüsselwerte:
-`FILT=TG`, `TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
+**AAVSO Extended Format** (auf Anforderung): kommagetrennte CSV zur direkten Einreichung über das
+Formular [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/)
+(**File upload** auswählen). Der Bericht enthält **eine Beobachtungszeile pro gemessenem Band**
+(`FILT=TG` und `FILT=TB`) mit gemeinsamem Datum, Luftmasse und Karten-ID. Schlüsselwerte:
+`TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
 
 ---
 
@@ -236,13 +269,13 @@ Installation:
 
 | Quelldatei (`screenshots/`) | Zielname (`images/`) |
 |-----------------------------|----------------------|
-| `screenshot, v1.2.0, (1) setup.png` | `setup.png` |
+| `screenshot, v1.3.0, (1) setup.png` | `setup.png` |
 | `screenshot, v1.2.0, (2) comp stars.png` | `comp-stars.png` |
-| `screenshot, v1.2.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v1.3.0, (3) photometry.png` | `photometry.png` |
 | `screenshot, v1.2.0, (4) mid-time.png` | `mid-time.png` |
 | `screenshot, v1.2.0, (5) verification.png` | `verification.png` |
-| `screenshot, v1.2.0, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v1.2.0, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v1.3.0, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v1.3.0, (6) report, aavso.png` | `report-aavso.png` |
 
 ---
 
@@ -268,9 +301,10 @@ TODO.md                      Aufgabenliste und Roadmap
 
 ## Roadmap
 
-- Mehrband-Photometrie TB/TG (blauer Kanal)
-- Frei wählbarer Zielstern
+- ~~Ensemble-Photometrie~~ — erledigt (v1.2.0)
+- ~~Mehrband TG + TB~~ — erledigt (v1.3.0)
 - TG→V-Farbtransformation (`TRANS=YES`)
+- Frei wählbarer Zielstern
 
 ---
 
