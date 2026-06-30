@@ -16,7 +16,7 @@ expected to brighten by ~8 magnitudes from quiescence (~10 mag) to outburst (~2 
 The script reuses PixInsight's own facilities — the astrometric WCS solution,
 FITS keywords, and DynamicPSF — rather than reimplementing them externally.
 
-![Dialog and verification window](docs/screenshot%2C%20v1.0.0%2C%20with%20verification%20window.png)
+The dialog is a five-step wizard — Setup → Photometry → Mid-time → Verification → Report.
 
 ---
 
@@ -65,10 +65,9 @@ A reference copy for chart X42597QE is included at `docs/X42597QE_photometry.csv
 Open your **linear, plate-solved OSC RGB master stack** as the active window.
 If the stack is not yet plate-solved, run `Script > Astronomy > ImageSolver` first.
 
-> The script saves the master stack path to disk before processing to enable full
-> process-history detection. If you have used any incompatible processes (stretch,
-> deconvolution, BlurXTerminator), the script will warn you in red after clicking
-> Run Photometry.
+> The script reads the process history from FITS keywords when the stack is saved to
+> disk. If incompatible processes (stretch, deconvolution, BlurXTerminator) are
+> detected, a red warning appears on the Photometry step.
 
 ### 4. Run the script
 
@@ -77,23 +76,26 @@ If the stack is not yet plate-solved, run `Script > Astronomy > ImageSolver` fir
   PixInsight registers it under `Script > BeSchne > Photometry` and picks up code
   changes on every subsequent run without rescanning.
 
-### 5. Fill in the dialog
+### 5. Work through the five wizard steps
 
-![Dialog](docs/screenshot%2C%20v1.0.0%2C%20dialog%20box%20only.png)
+**Step 1 — Setup**
 
 | Field | What to do |
 |-------|------------|
 | **Active image** | Confirm it shows your stack |
 | **Comparison CSV** | Browse to the CSV you downloaded in step 2 |
-| **Comp / Check** | Leave at defaults (`98` / `106`) for quiescence; see [Outburst strategy](#outburst-strategy) for nova peak |
+| **Comp / Check** | The dropdowns default to the two brightest usable V-band stars in the CSV. For quiescence (`98` / `106`) these are usually correct; see [Outburst strategy](#outburst-strategy) for nova peak |
 
-Click **Run Photometry**. The script:
-- Fits PSFs for the target, comp, and check stars (green channel only)
-- Derives T CrB TG magnitude from the comp-star differential
-- Shows an annotated verification thumbnail — confirm the correct stars are circled
-- Warns in orange if the check-star deviation exceeds 3×MERR (possible systematic error)
+**Step 2 — Photometry**
 
-### 6. Set the observation times
+Photometry runs automatically when you click this step. The panel shows:
+- **Magnitude** (TG band), **Filter: TG**, **Error (MERR)**
+- **Raw PSF flux** — the instrumental magnitudes for target, comp, and check
+- **Comparison star** and **Check star** labels and catalogue V magnitudes
+- A red warning if incompatible processes are detected in the image history
+- An orange warning if the check-star deviation exceeds 3×MERR
+
+**Step 3 — Mid-time**
 
 Use the **folder buttons** next to Start and End to reference your first and last
 surviving subframe. The script reads `DATE-OBS` and `EXPTIME` from the FITS header
@@ -101,11 +103,17 @@ and computes the mid-exposure time automatically as `(Start + End) / 2`.
 
 Verify the **Mid JD**, **airmass**, and **moon** readouts look reasonable.
 
-### 7. Create and export the report
+**Step 4 — Verification**
 
-1. Select **AAVSO Extended Format**
-2. Click **Create Report** — preview the 15-field CSV line
-3. Click **Export…** — save with a `.txt` extension
+Inspect the annotated thumbnail: target (green circle), comp (blue), check (yellow).
+Confirm the circles land on the intended stars. Use the stretch buttons to bring out
+faint stars if needed.
+
+**Step 5 — Report**
+
+A human-readable report is generated automatically when you enter this step.
+Switch to **AAVSO Extended Format** for submission, then click **Export…** and save
+with a `.txt` extension.
 
 ### 8. Submit to AAVSO WebObs
 
@@ -126,13 +134,13 @@ Chart **X42597QE** contains brighter comp stars for this stage:
 
 | Label | AUID | V mag | Use when T CrB is |
 |-------|------|-------|-------------------|
-| `98`  | `000-BBW-796` | 9.809 | Quiescence (~10 V) — **default** |
-| `106` | `000-BJS-901` | 10.554 | Quiescence — **default check** |
+| `98`  | `000-BBW-796` | 9.809 | Quiescence (~10 V) |
+| `106` | `000-BJS-901` | 10.554 | Quiescence (check star) |
 | `84`  | `000-BBW-888` | 8.361 | Brightening, ~7–9 mag |
 | `79`  | `000-BBW-881` | 7.886 | Brightening, ~7–9 mag |
 
-Change the **Comp** and **Check** dropdowns in the dialog before clicking Run Photometry.
-The selection persists between sessions.
+Change the **Comp** and **Check** dropdowns in the Setup step before running.
+The dropdowns always reset to the brightest available stars when the script starts.
 
 ### Stage 2 — Nova peak (~2–6 mag): get a new VSP chart
 
@@ -185,8 +193,7 @@ actual subframes rather than trusting the stack's `DATE-OBS`.
 | *PSF rejected — saturated* | Star clipped in the master | Choose a fainter comp/check label or reduce exposure |
 | *No usable V-band rows found* | Wrong CSV file or column mismatch | Re-export from AAVSO VSP and check the CSV has the expected columns |
 | Red warning: *forbidden process detected* | Stack was stretched or deconvolved | Re-stack from calibrated subs without applying any stretch or sharpening |
-| Orange warning: *check-star deviation > 3×MERR* | Possible systematic error | Check the verification thumbnail for wrong-star or blending issues; inspect atmospheric conditions |
-| Verification window hidden | Dialog is in the foreground | The window appears behind the dialog on some platforms — look for the *Verification* entry in the PixInsight workspace |
+| Orange warning: *check-star deviation > 3×MERR* | Possible systematic error | Check the Verification thumbnail for wrong-star or blending issues; inspect atmospheric conditions |
 
 ---
 
@@ -222,7 +229,6 @@ TODO.md                      Build checklist and roadmap
 ## Roadmap
 
 - Full native PixInsight documentation (`Script > Feature Scripts > ?` help)
-- Tabbed / step-oriented UI redesign with embedded verification thumbnail
 - Ensemble photometry (`CNAME=ENSEMBLE`)
 - TG→V colour transformation (`TRANS=YES`)
 - User-specifiable target star

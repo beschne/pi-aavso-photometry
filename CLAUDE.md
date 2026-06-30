@@ -109,8 +109,8 @@ These are enforced by the dialog's notice text and must be respected in all code
 5. **Comparison stars:** read from a user-chosen CSV (path persisted via `Settings`); project each in-frame star to pixels.
 6. **Measurement:** PSF fit via native **DynamicPSF**; read amplitude / background / sigma / flux. Apply quality filters (too faint, saturated/clipped, centroid drift) — see `docs/domain-knowledge.md`.
 7. **Photometry (current scope):** single comp star + single check star. Derive T CrB magnitude from comp's known V mag and the instrumental difference. `MERR` is computed from PSF fit residuals (see `docs/domain-knowledge.md`). The check star is a separate quality gate — its derived magnitude is compared to catalogue V; a >3×MERR deviation triggers a console warning.
-8. **Time confirmation (UI):** time fields (Start / End / Mid) are embedded in the unified `PhotometryDialog` — see `docs/time-handling.md` and **Dialog layout** below. Confirmed mid-time JD drives the AAVSO `DATE` field and airmass.
-9. **Output:** user clicks "Create Report" to generate text (human-readable by default; AAVSO Extended CSV on demand); "Export…" opens a `SaveFileDialog` and writes the file immediately — see `docs/aavso-extended-format.md`.
+8. **Time confirmation (UI):** time fields (Start / End / Mid) are in the Mid-time step of `PhotometryDialog` — see `docs/time-handling.md` and **Dialog layout** below. Confirmed mid-time JD drives the AAVSO `DATE` field and airmass.
+9. **Output:** navigating to the Report step auto-generates the report (human-readable by default; AAVSO Extended CSV on demand); "Export…" opens a `SaveFileDialog` and writes the file immediately — see `docs/aavso-extended-format.md`.
 
 ## File organisation — when to split
 
@@ -146,6 +146,7 @@ Full details: `docs/domain-knowledge.md`.
 - **Comparison CSV:** filter `Band == "V"`; prefer AUID over label in output; exclude blended stars (label 102 on chart X42597QE). CSV uses RFC 4180 quoting — use a proper parser, not `split(",")`. Fail loudly on column mismatch.
 - **DATE-OBS caveat:** ImageIntegration writes the midpoint of sub *start* times, ignoring exposure duration — unreliable. The acquisition-time dialog (see `docs/time-handling.md`) is the fix.
 - **Airmass:** Kasten & Young (1989) formula in pure JS — see `docs/domain-knowledge.md`. If lat or lon is absent, `AMASS=na` is written; this is valid per the AAVSO Extended File Format spec and is not treated as an error.
+- **Default comp/check:** the two stars whose V magnitude is closest to `TARGET.magQuiescence` (10.0 V for T CrB). Proximity minimises differential extinction and PSF fitting error contribution. Display order in the combos is brightest→faintest for easy browsing. Not persisted between sessions.
 - **Settings key:** `"BeSchne/Photometry/comparisonCsvPath"` — re-prompt if stored path no longer exists.
 
 ## AAVSO Extended File Format
@@ -168,7 +169,7 @@ Full field spec and comp/check star table: `docs/aavso-extended-format.md`.
 Key choices: `FILT=TG`, `TRANS=NO`, `MTYPE=STD` (not `DIF`), `OBSTYPE=CCD` (Seestar is a dedicated astronomy camera, not a consumer DSLR), `CHART=X42597QE`, `GROUP=na`.
 `CMAG`/`KMAG` are **instrumental** magnitudes (can be negative). Output via `SaveFileDialog` on every run (not persisted).
 
-Default comp/check at quiescence: label `98` (9.809 V, AUID `000-BBW-796`) and `106` (10.554 V, AUID `000-BJS-901`).
+Default comp/check: the two stars closest in V magnitude to `TARGET.magQuiescence` (10.0 V). For chart X42597QE at quiescence this yields label `98` (9.809 V, Δ=0.19) and `106` (10.554 V, Δ=0.55).
 
 ## Time handling
 
@@ -181,20 +182,34 @@ Full specification: `docs/time-handling.md`.
 
 ## Dialog layout
 
-Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). Sections are separated by `<hr/>` horizontal rules (`Label.useRichText = true`). Top-to-bottom layout:
+Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). The layout is a **five-step wizard**: a narrow left pane of step-navigator `Control` items, a vertical separator, and a right pane that shows one panel at a time.
 
-| Section | Contents |
-|---------|----------|
-| **Header** | Title label; "Benno Schneider © 2026" credit |
-| **Preconditions** | Three `Label` controls with ✓/✗ icon prefixes (Required / Incompatible / Safe); `warningLbl` (hidden until Run is clicked) shows detected forbidden processes in red bold HTML |
-| **Input** | Active image name (read-only); comparison CSV path + Browse button; **Comp** and **Check** ComboBoxes populated from the CSV (non-blended V-band stars, sorted brightest-first; selection persisted in Settings; populated on Browse and on dialog open if CSV path is already set) |
-| **Run** | "Run Photometry" button |
-| **Results** | Derived T CrB magnitude + uncertainty; instrumental mags for target / comp / check |
-| **Timing** | First/last sub reference buttons; Start / End ISO fields + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat / Lon / Elev editable fields (pre-filled from FITS); airmass readout |
-| **Output** | Format RadioButtons (Human readable default, AAVSO Extended); "Create Report" button (centred); scrollable read-only `TextBox` preview; "Export…" button (centred, opens `SaveFileDialog`, writes immediately) |
-| **Buttons** | "Close" button (`self.cancel()`) |
+**Left pane** — step navigator
+- Five custom `Control` items (not `PushButton`). Each draws its label left-aligned in `onPaint` (bold = current step; grey = disabled). `onMousePress` calls `activateStep(idx)`.
+- A flat `ToolButton` (help icon) sits at the bottom. No Close button — use the window's own.
+- `setMinSize(110, 18)`, sizer spacing = 0, to match normal text line rhythm.
 
-**RadioButton grouping:** the mid-time group (`rbMidpoint`, `rbStart`, `rbManual`) and the format group (`rbHuman`, `rbAavso`) must have **different parent widgets** to avoid Qt's per-parent exclusive grouping silently unchecking `rbMidpoint` when `rbHuman.checked = true` is set. The format pair is parented to an intermediate `Control` (`fmtGrp`); the mid-time pair is parented directly to the dialog.
+**Step enablement** (`isStepEnabled`):
+- Steps 0, 1, 2 always enabled.
+- Step 3 (Verification): requires `_photDone`.
+- Step 4 (Report): requires `_photDone && !isNaN(self.midJD)`.
+
+**Auto-triggers in `activateStep`:**
+- Entering step 1 → runs `runPhotometry()` (wrapped in try/catch).
+- Entering step 4 → runs `generateReport()`.
+
+| Step | Panel | Contents |
+|------|-------|----------|
+| **1 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); CSV path + Browse; **Comp** and **Check** ComboBoxes (non-blended V-band stars, sorted brightest-first; always defaults to index 0/1 from CSV on each run — not persisted); **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
+| **2 — Photometry** | `runPanel` | Magnitude + Filter TG + Error (MERR); Raw PSF flux row (T/Comp/Check instrumental mags with star labels); Comparison star + Check star labels/V mags; `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation) |
+| **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
+| **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = green circle, comp = blue, check = yellow); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
+| **5 — Report** | `reportPanel` | Format RadioButtons (Human readable default, AAVSO Extended); scrollable read-only `TextBox` preview; Export button (opens `SaveFileDialog`, writes immediately) |
+
+**RadioButton grouping:** three independent exclusive groups, each with a different parent to avoid Qt's per-parent exclusion colliding across groups:
+- Mid-time group (`rbMidpoint`, `rbStart`, `rbManual`) — parented to `midtimePanel`.
+- Format group (`rbHuman`, `rbAavso`) — parented to intermediate `Control` (`fmtGrp`).
+- Stretch group (`rbNoStretch`, `rbAutoStretch`, `rbBoosted`) — parented to intermediate `Control` (`stretchGrp`) inside `verifyPanel`.
 
 ## PJSR API reference
 
@@ -206,12 +221,11 @@ Notes on verified patterns and stumbling blocks: `docs/pjsr-api-notes.md`.
 
 Keep code structured so these are additions, not rewrites. In priority order:
 
-- ~~**(Priority 1) Selectable comp/check stars at runtime.**~~ Done: Comp label / Check label edit fields in the dialog, defaulting to `98`/`106`, persisted in Settings. Available stars listed after Run. See `docs/domain-knowledge.md` for full outburst strategy.
-
-- **(High priority — QA, low effort)**
-  - **Annotated verification image.** Thumbnail showing target + comp/check stars before the report is written. Catches the most common failure (wrong star) at a glance.
-  - **Check-star gate.** Standardise the check star's magnitude from the comp; if (K−C) deviation exceeds a tunable threshold, warn before writing.
-  - ~~**Real `MERR`.**~~ Done: PSF MAD residuals propagated via matched-filter formula; target + comp combined in quadrature. Check-star deviation is now a separate quality gate logged to the console.
+- ~~**(Priority 1) Selectable comp/check stars at runtime.**~~ Done: Comp/Check ComboBoxes in Setup; default = brightest/second-brightest in CSV; persisted in Settings.
+- ~~**Five-step wizard UI.**~~ Done: Setup → Photometry → Mid-time → Verification → Report. Photometry and report auto-trigger on step entry.
+- ~~**Annotated verification image.**~~ Done: embedded thumbnail in step 4 with No/Auto/Boosted stretch controls.
+- ~~**Check-star gate.**~~ Done: deviation > 3×MERR triggers orange warning in Photometry step and console.
+- ~~**Real `MERR`.**~~ Done: PSF MAD residuals propagated via matched-filter formula; target + comp combined in quadrature.
 
 - **Ensemble photometry.** Multiple comp stars → `CNAME=ENSEMBLE`, `CMAG=na`; list used stars in `NOTES`.
 - **User-specifiable target star.** Currently T CrB is hardcoded; isolate the target definition for easy extension.
