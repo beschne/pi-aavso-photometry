@@ -10,6 +10,9 @@
 Ein natives **PixInsight-PJSR-Skript**, das Differenzphotometrie von Veränderlichen Sternen
 direkt in PixInsight durchführt und einen **AAVSO Extended File Format**-Bericht erstellt.
 
+[PixInsight](https://pixinsight.com) ist eine professionelle Bildverarbeitungsplattform
+für Astrofotografie; PJSR ist die darin enthaltene JavaScript-Skriptumgebung.
+
 Aktuell konfiguriert für **T Coronae Borealis** ("Blaze Star"), eine rekurrente Nova,
 die sich von Ruhelage (~10 mag) bis Ausbruch (~2 mag) um ~8 Größenklassen aufhellt.
 

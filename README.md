@@ -10,6 +10,10 @@
 A native **PixInsight PJSR script** that performs differential photometry of variable
 stars directly inside PixInsight and writes an **AAVSO Extended File Format** report.
 
+[PixInsight](https://pixinsight.com) is a professional astronomical image processing
+platform widely used in the astrophotography community; PJSR is its built-in JavaScript
+scripting environment.
+
 Currently configured for **T Coronae Borealis** ("Blaze Star"), a recurrent nova
 expected to brighten by ~8 magnitudes from quiescence (~10 mag) to outburst (~2 mag).
 
