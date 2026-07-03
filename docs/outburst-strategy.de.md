@@ -1,5 +1,7 @@
 # T CrB Ausbruchsstrategie
 
+*[English version](outburst-strategy.md)*
+
 Praktische Ausrüstungs- und Kartenempfehlungen für alle, die für den Ausbruch von
 T Coronae Borealis gerüstet sein wollen. Die Winkelabstände und Kartenabdeckung
 stammen aus der AAVSO-Photometriesequenz X42615, die Bildfelder aus den

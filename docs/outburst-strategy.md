@@ -1,5 +1,7 @@
 # T CrB Outburst Observing Strategy
 
+*[Deutsche Version](outburst-strategy.de.md)*
+
 Practical equipment and chart guidance for observers who want to be ready when
 T Coronae Borealis erupts. Star separations and chart coverage come from the
 AAVSO X42615 photometry sequence; FOVs are from the instrument specs.
