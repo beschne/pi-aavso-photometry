@@ -39,8 +39,8 @@ them externally.
 | `aavso-photometry.js` | The script. Runs on the active image window; locates T CrB via the plate solve; measures it against CSV comparison stars; writes an AAVSO Extended report. |
 | `sample_comparison_stars.csv` | Format sample for the comparison-star CSV (two stars, multiple bands). |
 | `docs/Photometry.html` | Native PixInsight help page — see **PixInsight documentation** below for install instructions. |
-| `docs/X42597QE_photometry.csv` | Reference copy of the AAVSO VSP export for chart X42597QE. |
-| `docs/X42597QE.png` | AAVSO finder chart for T CrB, chart X42597QE. |
+| `charts/X42597QE.csv` | Reference copy of the AAVSO VSP export for chart X42597QE. |
+| `charts/X42597QE.png` | AAVSO finder chart for T CrB, chart X42597QE. |
 | `screenshots/` | Dialog screenshots for all versions, used in the READMEs and PI docs. |
 
 ## Running and development

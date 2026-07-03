@@ -2,9 +2,8 @@
 .DS_Store
 
 # Private notes
-scratch/
 PRIVATE_NOTES.md
+SECURITY_AUDIT.md
 
 # Test data (large XISF/FITS image files, personal observations)
-test data/
 *.xisf

@@ -67,12 +67,8 @@
 - [x] Real `MERR`: Poisson + sky-background noise (PSF MAD residuals propagated via matched-filter formula)
 
 ### Security audit (repeat before every release)
-- [x] **Input validation** — `parseCoord` validates lat/lon with range clamping; `isoToJD` validates ISO format via regex; observer code stripped of newlines before writing to report header
-- [x] **CSV content sanitisation** — AUIDs and notes pass through `sanitizeField` (strips `,\r\n`); star labels in HTML contexts pass through `escHtml` (escapes `<>&`)
-- [x] **FITS keyword sanitisation** — `detectForbiddenHistory` emits only names from a hardcoded whitelist, never raw FITS values; image ID is an internal PI identifier not a FITS value
-- [x] **File path handling** — CSV path and export path originate from `OpenFileDialog` / `SaveFileDialog`; XISF header read uses `_window.filePath` (set by PI when the user opens a file) or a fallback `OpenFileDialog`; `File.exists()` guard before open; magic-byte check (`XISF`) and 8 MB header cap inside `readXISFFrameCount`; no path traversal possible
-- [x] **No unintended network access** — no `NetworkTransfer` calls; only a static URL string inside a `MessageBox`
-- [x] **Settings namespace isolation** — all keys under `BeSchne/Photometry/`; PJSR Settings keys are globally scoped by the full key string so there is no cross-script leakage
+
+See `SECURITY_AUDIT.md` (gitignored).
 
 ### PixInsight script documentation (needed before 1.0.0)
 - [x] **`#feature-info` text** — the one-paragraph description shown in `Script > Feature Scripts` should be complete and accurate (currently minimal)
@@ -94,6 +90,25 @@
 - [x] **UI redesign — tabbed / step-oriented layout.** Implemented as a 6-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report) with a left-pane step navigator and embedded verification thumbnail. Photometry and report auto-trigger on step entry.
 - [x] **Verification image stretch controls.** No Stretch / Auto / Boosted radio buttons embedded in the Verification step; re-render on change without leaving the dialog.
 - [x] **Ensemble photometry (`CNAME=ENSEMBLE`).** Six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars step runs a single DynamicPSF discovery pass on all in-frame V-band candidates; TreeBox shows V mag, Δmag, PSF quality, recommended flag. Default selection: up to 6 stars with Δmag ≤ 2.0 and good PSF. ZP = mean(magV_i − instMag_i); MERR = √(σ_ZP² + σ_T²). Report: `CNAME=ENSEMBLE`, `CMAG=na`, comp labels in NOTES. Single-comp case (N=1) identical to previous format. End-to-end tested with T CrB submission to AAVSO.
-- [x] Multiband TB/TG (blue channel)
-- [ ] User-specifiable target star
-- [ ] TG→V transformation (`TRANS=YES`)
+- [x] **Multiband TB/TG** (blue channel)
+- [ ] **FOV-aware comparison star CSV.** Different instruments need different AAVSO VSP charts and CSVs. See details below.
+- [ ] User-specifiable **target star**
+- [ ] **TG→V** transformation (`TRANS=YES`)
+
+---
+
+## FOV-aware comparison star CSV — details
+
+The Seestar S30 Pro has a ~4.3° × 2.4° FOV. At quiescence (T CrB ≈ 10 V) this is fine: the 1° AAVSO VSP chart X42597QE contains enough ~10 V comparison stars. During outburst T CrB reaches ~2 V, so all useful comparison stars (2–6 V) lie far outside a 1° field. A wider-FOV instrument needs a correspondingly larger VSP chart and a new CSV download.
+
+Photometric star charts and the corresponding photometric comparison star tables (CSV) are fetched from the **AAVSO Variable Star Plotter (VSP):** https://www.aavso.org/apps/vsp/
+
+**VSP gotcha:** if a chart ID is pre-filled in the "Chart ID" field, the VSP ignores the FOV selector and always returns that chart. **Clear the Chart ID field explicitly** before changing the FOV, then hit Plot Chart to generate a new chart at the desired scale.
+
+**What the script needs to support:**
+- The CSV path is already user-selectable and persisted. No structural change required for basic multi-instrument use — the user simply browses to the new file.
+- The `CHART` constant in the report header (`X42597QE`) is hardcoded and must be updated to match the new chart. Currently this requires editing the script.
+- Optionally: read the chart ID from the CSV filename or a header field and write it into `CHART` automatically, removing the need to edit the source.
+- **FOV readout from plate solution:** the WCS solution already in the active image contains everything needed to compute the image FOV. Display it in the Setup step so the user knows exactly what to enter in the AAVSO VSP "Field of view" field when downloading a new chart and CSV for a different instrument. This also makes the script instrument-agnostic — any plate-solved image from any telescope works without manual configuration.
+
+**Trigger for this work:** T CrB outburst is imminent. Have a wider-FOV CSV ready and know the workflow before it erupts.

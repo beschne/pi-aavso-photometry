@@ -24,10 +24,21 @@ FITS override: if `SITELAT`/`SITELONG` keywords are present and reliable, they m
 - **Never relabel TG as V.**
 - I/R/B bands track the persistent M-giant companion, not white-dwarf activity. This script reports TG only by design.
 
+## AAVSO VSP chart ID naming convention
+
+The VSP issues two different IDs for the same observation field:
+
+| ID example | Suffix | Use |
+|---|---|---|
+| `X42615BSV` | V = visual finder chart | Print and use at the eyepiece |
+| `X42615BSX` | X = extended photometry sequence | Put in the AAVSO `CHART` report field |
+
+CCD/OSC observers must cite the **chart ID** from the photometry sequence (X suffix) in the `CHART` report field, not the finder chart ID. The VSP photometry table page states it explicitly: *"Report this sequence as X42597QE in the chart field."* That value is the chart ID — used as both the CSV filename (e.g. `charts/X42597QE.csv`) and the AAVSO `CHART` field. The sequence covers stars within half the plotted FoV radius — a 7.5° chart gives a 3.75° sequence.
+
 ## Comparison-star CSV (AAVSO VSP export)
 
 **Files:**
-- `docs/X42597QE_photometry.csv` — reference copy of the AAVSO VSP export for chart X42597QE
+- `charts/X42597QE.csv` — reference copy of the AAVSO VSP export for chart X42597QE
 - `sample_comparison_stars.csv` — format sample (root of repo)
 
 **Columns:** `AUID,RA,Dec,Label,Band,Mag,Error,Comments`
@@ -98,7 +109,7 @@ At peak brightness the faint comp stars in X42597QE are still measurable — the
 4. Load the new CSV in the script via the Browse button; enter suitable comp/check labels from the new chart.
 5. Update the `CHART` constant in the script to match the new chart ID shown in the VSP output.
 
-**The Seestar FOV constraint:** the Seestar S50 has a ~1.4° × 1.0° FOV. At 2 mag, suitable comp stars (1–4 mag) may not exist within that window — the nearest bright Corona Borealis star, Alphecca (α CrB, 2.22 V), is ~4° away. If no adequate comp falls in frame, consider:
+**The Seestar FOV constraint:** the Seestar S30 Pro has a ~4.3° × 2.4° FOV. At 2 mag, suitable comp stars (1–4 mag) may not exist within that window — the nearest bright Corona Borealis star, Alphecca (α CrB, 2.22 V), is ~4° away. If no adequate comp falls in frame, consider:
 - Using a wider-field setup for the nova peak
 - Visual observation — AAVSO actively solicits visual reports for bright novae
 - Ensemble photometry of several fainter in-frame stars with `CNAME=ENSEMBLE` (future feature)

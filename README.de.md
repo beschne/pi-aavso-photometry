@@ -57,19 +57,32 @@ Der Dialog ist ein sechsstufiger Assistent — Setup → Vergleichssterne → Ph
 Repository klonen oder herunterladen und in einem beliebigen Ordner ablegen.
 Keine Installation, kein Neustart von PixInsight erforderlich.
 
-### 2. Vergleichsstern-CSV vom AAVSO VSP herunterladen
+### 2. Vergleichsstern-CSV herunterladen
 
 Das Skript benötigt eine Photometrietabelle mit Vergleichssternen und ihren Kataloghelligkeiten.
+Vorberechnete CSVs für T CrB in gängigen Bildfeldern sind bereits im Ordner `charts/` enthalten:
 
-1. AAVSO Variable Star Plotter aufrufen: [aavso.org/vsp](https://www.aavso.org/vsp)
-2. Zielname eingeben: **T CrB**
-3. **Bildfeld** auf **60′** setzen (entspricht einem typischen Seestar/Kleinteleskop-Gesichtsfeld)
-4. **Grenzhelligkeit** auf **12,0** setzen (erfasst Vergleichssterne bis ~11 mag)
-5. **Karte zeichnen** klicken — Karten-ID notieren (z. B. `X42597QE`)
-6. **Photometrietabelle** → **Herunterladen** → als **CSV** speichern
+| Datei | Bildfeld | Am besten für |
+|-------|----------|---------------|
+| `charts/X42615NN.csv` | 60′ | Seestar / Kleinteleskop in Ruhelage |
+| `charts/X42615CFO.csv` | 120′ | |
+| `charts/X42615CFP.csv` | 180′ | |
+| `charts/X42615CFD.csv` | 450′ | Standard — breiter Bereich um das Ziel |
+| `charts/X42615CFQ.csv` | 900′ | Ausbruch — hellere Comp-Sterne in größerem Abstand |
 
-Die heruntergeladene Datei ist die Vergleichsstern-CSV.
-Eine Referenzkopie für Karte X42597QE ist unter `docs/X42597QE_photometry.csv` zu finden.
+Zum Aktualisieren oder für ein anderes Bildfeld, vom Repository-Stammverzeichnis aus ausführen:
+
+```bash
+python3 tools/fetch-vsp.py --fov 60 --maglimit 14.5
+```
+
+Details zu allen Optionen: `tools/README.md`. Die Karten-ID, die das Tool ausgibt (z. B. `X42615NN`),
+ist der Wert für das AAVSO-Berichtsfeld `CHART` — sie entspricht auch dem CSV-Dateinamen.
+
+> **Warum das Skript diese Daten nicht automatisch abrufen kann:** Der AAVSO-VSP befindet sich
+> gerade in einer Plattformmigration (v2), und der maschinenlesbare API-Endpunkt ist derzeit
+> nicht verfügbar. Das Tool `fetch-vsp.py` umgeht dies durch Auslesen der HTML-Photometrietabelle,
+> die weiterhin bereitgestellt wird. Dieser Hinweis entfällt, sobald die API wieder verfügbar ist.
 
 ### 3. Bild in PixInsight vorbereiten
 
@@ -193,11 +206,9 @@ Am Maximum sättigt T CrB bei normalen Belichtungszeiten. Dann sind sehr kurze S
 (unter einer Sekunde) erforderlich. Die schwachen Vergleichssterne aus X42597QE
 sind dann möglicherweise nicht mehr erfassbar.
 
-1. [AAVSO VSP](https://www.aavso.org/vsp) erneut aufrufen, Bildfeld **180′**,
-   Grenzhelligkeit **5–6**
-2. Neue Photometrietabelle als CSV herunterladen
-3. Über **Durchsuchen** laden und passende Comp/Check-Labels eingeben
-4. Konstante `CHART` im Skript (Zeile ~40) auf die neue Karten-ID aktualisieren
+1. `python3 tools/fetch-vsp.py --fov 180 --maglimit 6` ausführen — neue CSV mit helleren Comp-Sternen; die Karten-ID wird auf der Konsole ausgegeben
+2. Über **Durchsuchen** laden und passende Comp/Check-Labels eingeben
+3. Konstante `CHART` im Skript (Zeile ~40) auf die neue Karten-ID aktualisieren
 
 AAVSO gibt bei Ausbruchsbeginn _Alert Notices_ mit konkreten Karten- und
 Belichtungsempfehlungen heraus — [aavso.org/news](https://www.aavso.org/news) beobachten.
@@ -217,8 +228,8 @@ trägt aber die kombinierten unkalibrierten Versätze beider Passbänder. Er eig
 besten als relativer Indikator für Farbveränderungen über die Zeit, nicht als absoluter
 Farbindex im Vergleich zu Standardphotometrie.
 
-**Seestar-Gesichtsfeld bei Nova-Maximum.** Der Seestar S50 Pro hat ein Gesichtsfeld von
-~1,4° × 1,0°. Bei Maximum (~2 mag) liegen die nächsten geeigneten Vergleichssterne
+**Seestar-Gesichtsfeld bei Nova-Maximum.** Der Seestar S30 Pro hat ein Gesichtsfeld von
+~4,3° × 2,4°. Bei Maximum (~2 mag) liegen die nächsten geeigneten Vergleichssterne
 (1–4 mag) möglicherweise außerhalb dieses Fensters. In diesem Fall empfiehlt sich ein
 Weitwinkelinstrument, visuelle Beobachtung oder Ensemble-Photometrie mit schwächeren
 feldinternen Sternen.
@@ -289,10 +300,11 @@ aavso-photometry.js          Hauptskript
 sample_comparison_stars.csv  Formatbeispiel für die Vergleichsstern-CSV
 docs/
   Photometry.html            Native PixInsight-Hilfeseite (in PI-Dokumentationsbaum installieren)
-  X42597QE_photometry.csv    AAVSO-VSP-Export für Karte X42597QE
-  X42597QE.png               AAVSO-Aufsuchkarte für T CrB
   aavso-extended-format.md   AAVSO Extended File Format Feldbeschreibung
   domain-knowledge.md        Photometrie-Konstanten und wissenschaftliche Hinweise
+charts/
+  X42597QE.csv               AAVSO-VSP-Export für Karte X42597QE
+  X42597QE.png               AAVSO-Aufsuchkarte für T CrB (und weitere Karten)
   time-handling.md           Spezifikation der Belichtungsmittelzeit
   pjsr-api-notes.md          Verifizierte PJSR-API-Muster und Fallstricke
 screenshots/                 Dialog-Screenshots (alle Versionen)

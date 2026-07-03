@@ -137,18 +137,27 @@
    <div id="GettingStarted">
 
 <div class="pidoc_subsection" id="__GettingStarted_CSV__">
-   <h4 class="pidoc_subsectionTitle">3.1&emsp;Download the Comparison-Star CSV</h4>
+   <h4 class="pidoc_subsectionTitle">3.1&emsp;Get the Comparison-Star CSV</h4>
 
-<ol>
-<li>Go to the <strong>AAVSO Variable Star Plotter</strong>: <a href="https://www.aavso.org/vsp">aavso.org/vsp</a></li>
-<li>Enter target name: <strong>T CrB</strong></li>
-<li>Set <strong>Field of view</strong> to <strong>60&prime;</strong> (matches a typical small-scope or Seestar field)</li>
-<li>Set <strong>Limiting magnitude</strong> to <strong>12.0</strong></li>
-<li>Click <strong>Plot Chart</strong> and note the <strong>Chart ID</strong> (e.g. <span class="pidoc_code">X42597QE</span>)</li>
-<li>Click <strong>Photometry table</strong> &rarr; <strong>Download</strong> &rarr; save as CSV</li>
-</ol>
+<p>The script needs a photometry table listing comparison stars and their catalogue magnitudes.
+Pre-fetched CSVs for T&nbsp;CrB at common field sizes are included in the <span class="pidoc_code">charts/</span> folder:</p>
 
-<p>A reference copy for chart X42597QE is distributed with this script in <span class="pidoc_code">docs/X42597QE_photometry.csv</span>.</p>
+<table class="pidoc_table">
+<tr><th>File</th><th>FoV</th><th>Best for</th></tr>
+<tr><td><span class="pidoc_code">charts/X42615NN.csv</span></td><td>60&prime;</td><td>Seestar / small-scope at quiescence</td></tr>
+<tr><td><span class="pidoc_code">charts/X42615CFO.csv</span></td><td>120&prime;</td><td></td></tr>
+<tr><td><span class="pidoc_code">charts/X42615CFP.csv</span></td><td>180&prime;</td><td></td></tr>
+<tr><td><span class="pidoc_code">charts/X42615CFD.csv</span></td><td>450&prime;</td><td>Default &mdash; wide margin around the target</td></tr>
+<tr><td><span class="pidoc_code">charts/X42615CFQ.csv</span></td><td>900&prime;</td><td>Outburst &mdash; brighter comp stars at larger separations</td></tr>
+</table>
+
+<p>To regenerate or fetch a different field size, run from the repository root:</p>
+
+<pre>python3 tools/fetch-vsp.py --fov 60 --maglimit 14.5</pre>
+
+<p>The chart ID printed by the tool (e.g. <span class="pidoc_code">X42615NN</span>) is the value for the AAVSO <span class="pidoc_code">CHART</span> report field; it is also the CSV filename.</p>
+
+<p><em>Why the script cannot fetch comparison stars automatically:</em> the AAVSO VSP is mid-migration to a new platform (v2) and the machine-readable API endpoint is currently unavailable. The <span class="pidoc_code">fetch-vsp.py</span> tool works around this by scraping the HTML photometry table. This note will be removed once the API is restored.</p>
 </div>
 
 <div class="pidoc_subsection" id="__GettingStarted_Image__">

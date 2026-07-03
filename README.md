@@ -57,19 +57,32 @@ The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-
 Clone or download this repository and place it in a convenient folder on your machine.
 No installation or PixInsight restart is required.
 
-### 2. Get the comparison-star CSV from AAVSO VSP
+### 2. Get the comparison-star CSV
 
-The script needs a photometry table that lists the comparison stars and their catalogue magnitudes.
+The script needs a photometry table listing comparison stars and their catalogue magnitudes.
+Pre-fetched CSVs for T CrB at common field sizes are already included in `charts/`:
 
-1. Go to the **AAVSO Variable Star Plotter**: [aavso.org/vsp](https://www.aavso.org/vsp)
-2. Enter target name: **T CrB**
-3. Set **Field of view** to **60′** (matches a typical Seestar/small-scope FOV)
-4. Set **Limiting magnitude** to **12.0** (captures comp stars down to ~11 mag)
-5. Click **Plot Chart** — note the **Chart ID** (e.g. `X42597QE`)
-6. Click **Photometry table** → **Download** → save as **CSV**
+| File | FoV | Best for |
+|------|-----|----------|
+| `charts/X42615NN.csv` | 60′ | Seestar / small-scope at quiescence |
+| `charts/X42615CFO.csv` | 120′ | |
+| `charts/X42615CFP.csv` | 180′ | |
+| `charts/X42615CFD.csv` | 450′ | Default — wide margin around the target |
+| `charts/X42615CFQ.csv` | 900′ | Outburst — brighter comp stars at larger separations |
 
-The downloaded file is the comparison-star CSV.
-A reference copy for chart X42597QE is included at `docs/X42597QE_photometry.csv`.
+To refresh them or generate one for a different field size, run from the repository root:
+
+```bash
+python3 tools/fetch-vsp.py --fov 60 --maglimit 14.5
+```
+
+See `tools/README.md` for all options. The chart ID printed to the console (e.g. `X42615NN`)
+is the value to enter in the AAVSO `CHART` report field — it is also the CSV filename.
+
+> **Why the script can't fetch this automatically:** the AAVSO VSP is mid-migration to a
+> new platform (v2) and the machine-readable API endpoint is currently unavailable.
+> The `fetch-vsp.py` tool works around this by scraping the HTML photometry table,
+> which is still served. This note will be removed once the API is restored.
 
 ### 3. Prepare your image in PixInsight
 
@@ -192,11 +205,9 @@ The dropdowns always reset to the brightest available stars when the script star
 At peak brightness T CrB will saturate any normal exposure. You will need very short
 sub-second frames, and the faint comp stars in X42597QE may be undetectable.
 
-1. Return to [AAVSO VSP](https://www.aavso.org/vsp), set FOV to **180′** and limiting
-   magnitude to **5–6**
-2. Download the new photometry table as CSV
-3. Load it via the **Browse** button and enter suitable comp/check labels
-4. Update the `CHART` constant in the script (line ~40) to the new chart ID
+1. Run `python3 tools/fetch-vsp.py --fov 180 --maglimit 6` to get a new CSV with brighter comp stars; the chart ID is printed to the console
+2. Load it via the **Browse** button and enter suitable comp/check labels
+3. Update the `CHART` constant in the script (line ~40) to the new chart ID
 
 AAVSO will issue Alert Notices with specific chart and exposure guidance when the
 outburst begins — monitor [aavso.org/news](https://www.aavso.org/news).
@@ -217,7 +228,7 @@ qualitatively but carries the combined uncalibrated offsets of both passbands.
 It is best used as a relative indicator of colour change over time, not as an
 absolute colour index.
 
-**Seestar FOV constraint at nova peak.** The Seestar S50 has a ~1.4° × 1.0° FOV.
+**Seestar FOV constraint at nova peak.** The Seestar S30 Pro has a ~4.3° × 2.4° FOV.
 At nova peak (~2 mag) the nearest suitable comparison stars (1–4 mag) may lie outside
 this window. In that case consider a wider-field instrument, visual observation, or
 ensemble photometry of fainter in-frame stars.
@@ -286,10 +297,11 @@ aavso-photometry.js          Main script
 sample_comparison_stars.csv  Format sample for the comparison-star CSV
 docs/
   Photometry.html            Native PixInsight help page (install into PI doc tree)
-  X42597QE_photometry.csv    AAVSO VSP export for chart X42597QE
-  X42597QE.png               AAVSO finder chart for T CrB
   aavso-extended-format.md   AAVSO Extended File Format field spec
   domain-knowledge.md        Photometry constants and science notes
+charts/
+  X42597QE.csv               AAVSO VSP export for chart X42597QE
+  X42597QE.png               AAVSO finder chart for T CrB (and additional charts)
   time-handling.md           Mid-exposure time specification
   pjsr-api-notes.md          Verified PJSR API patterns and pitfalls
 screenshots/                 Dialog screenshots (all versions)
