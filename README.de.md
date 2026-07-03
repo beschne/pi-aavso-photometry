@@ -163,6 +163,10 @@ und mit Endung `.txt` speichern.
 
 T CrB erwartet man um ~8 Größenklassen heller — von Ruhelage (~10 V) bis Nova-Maximum (~2 V).
 
+Detaillierte Ausrüstungs- und Kartenempfehlungen — welche Vergleichssterne bei welcher
+Helligkeit in welches Bildfeld passen und welche CSV-Karte in jeder Phase zu laden ist —
+finden sich in [docs/outburst-strategy.de.md](docs/outburst-strategy.de.md).
+
 ### Warum TB für die Ausbruchserkennung am wichtigsten ist
 
 T CrB ist ein symbiotisches System: ein kühler M3-III-Roter Riese überträgt Masse auf einen

@@ -162,6 +162,10 @@ with a `.txt` extension.
 
 T CrB is expected to brighten by ~8 magnitudes from quiescence (~10 V) to nova peak (~2 V).
 
+For detailed equipment and chart guidance — which comp stars fit in which frame at which
+brightness, and which chart CSV to load at each phase — see
+[docs/outburst-strategy.md](docs/outburst-strategy.md).
+
 ### Why TB matters most for outburst detection
 
 T CrB is a symbiotic system: a cool M3 III red giant transfers mass to a white dwarf
