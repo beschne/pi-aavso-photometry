@@ -56,7 +56,7 @@ als Comp, den besten verfügbaren schwächeren Stern als Check.
 
 **RedCat 51 + ZWO ASI2600MC Air — APS-C 23,5×15,7 mm → 5,4°×3,6°, 3,1″/px**
 
-Für die hellen Ausbruchs-Vergleichssterne dasselbe Bild wie beim Seestar: nur
+Für die hellen Ausbruchs-Vergleichssterne dasselbe Bild wie beim Seestar S30 Pro: nur
 Label 41 passt hinein. Das weitere Feld zahlt sich in der **Aufhellungsphase
 (5–8 mag)** aus, weil es mehr schwache Ensemble-Vergleichssterne der 450′-Karte
 mitnimmt und so den ZP-Fehler drückt.
@@ -80,8 +80,8 @@ Skript und AAVSO-Berichtsformat bleiben dieselben.
 |-----------------|-----------------|-------|--------------------------------|
 | ~10 mag (Ruhe) | Seestar S30 Pro | `charts/X42615CFD.csv` (450′) | bereits vorhanden |
 | 8–10 mag (Aufhellung) | Seestar S30 Pro | `charts/X42615CFQ.csv` (900′) | bereits vorhanden |
-| 4–8 mag | Seestar S30 Pro oder RedCat51 + APS-C | `charts/X42615CFQ.csv` (900′) | bereits vorhanden |
-| 2–4 mag | RedCat51 + Vollformat | `charts/X42615CHL.csv` (900′, Grenzhelligkeit 5) | bereits vorhanden |
+| 4–8 mag | Seestar S30 Pro oder RedCat 51 + APS-C | `charts/X42615CFQ.csv` (900′) | bereits vorhanden |
+| 2–4 mag | RedCat 51 + Vollformat | `charts/X42615CHL.csv` (900′, Grenzhelligkeit 5) | bereits vorhanden |
 | ~2 mag (Maximum) | Kameraobjektiv | `charts/X42615CHL.csv` oder Karte aus der AAVSO Alert Notice | Alert Notice folgen; fetch-vsp.py mit dem angegebenen Bildfeld ausführen |
 
 Am Maximum sättigt T CrB selbst bei sehr kurzen Belichtungen im Teleskop. Nimm die
@@ -111,7 +111,7 @@ Zwei Karten liegen bereits fertig vor:
   | 28 | 2,78 | 8,3° — nur Kameraobjektiv |
   | 37 | 3,68 | β CrB, 7,7° — nur Kameraobjektiv |
   | 37 | 3,75 | 8,5° — nur Kameraobjektiv |
-  | 38 | 3,81 | γ CrB, 3,8° — RedCat51+Vollformat oder Kameraobjektiv |
+  | 38 | 3,81 | γ CrB, 3,8° — RedCat 51 + Vollformat oder Kameraobjektiv |
   | 41 | 4,14 | ε CrB, 1,05° — **in jeder Konfiguration, auch Seestar S30 Pro** |
   | 45 | 4,52 | 7,5° — nur Kameraobjektiv |
   | 48 | 4,83 | 3,2° — nur Kameraobjektiv (nördlich von T CrB) |

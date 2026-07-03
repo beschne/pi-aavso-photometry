@@ -39,7 +39,7 @@ its Dec offset ≤ short half-axis (worst-case alignment with T CrB centred):
 | 22 (Alphecca) | 2.23 | 5.62° | ✗ | ✗ | ✗ (dRA 5.6° > 4.1°) |
 
 **Key finding:** label 41 (ε CrB, V=4.14, 1.05° away) is the only AAVSO-vetted bright
-comp star that fits in a telescope frame. It is in every setup including the Seestar.
+comp star that fits in a telescope frame. It is in every setup including the Seestar S30 Pro.
 
 ## Instrument comparison at outburst
 
@@ -51,7 +51,7 @@ single-band report; use label 41 as comp and the best available fainter star as 
 
 **RedCat 51 + ZWO ASI2600MC Air — APS-C 23.5×15.7 mm → 5.4°×3.6°, 3.1″/px**
 
-Same result as the Seestar for outburst bright comp stars: only label 41 fits.
+Same result as the Seestar S30 Pro for outburst bright comp stars: only label 41 fits.
 The wider frame helps during the **brightening phase (5–8 mag)**, where it captures
 more of the faint ensemble comp stars from the 450′ chart, reducing ZP scatter.
 
@@ -71,10 +71,10 @@ and AAVSO report format apply.
 
 | T CrB brightness | Best instrument | Chart | Fetch command (if needed) |
 |-----------------|-----------------|-------|---------------------------|
-| ~10 mag (quiescence) | Seestar | `charts/X42615CFD.csv` (450′) | already available |
-| 8–10 mag (brightening) | Seestar | `charts/X42615CFQ.csv` (900′) | already available |
-| 4–8 mag | Seestar or RedCat51+APS-C | `charts/X42615CFQ.csv` (900′) | already available |
-| 2–4 mag | RedCat51+full-frame | `charts/X42615CHL.csv` (900′, maglimit 5) | already available |
+| ~10 mag (quiescence) | Seestar S30 Pro | `charts/X42615CFD.csv` (450′) | already available |
+| 8–10 mag (brightening) | Seestar S30 Pro | `charts/X42615CFQ.csv` (900′) | already available |
+| 4–8 mag | Seestar S30 Pro or RedCat 51 + APS-C | `charts/X42615CFQ.csv` (900′) | already available |
+| 2–4 mag | RedCat 51 + full-frame | `charts/X42615CHL.csv` (900′, maglimit 5) | already available |
 | ~2 mag (peak) | Camera lens | `charts/X42615CHL.csv` or AAVSO Alert Notice chart | follow Alert Notice; run fetch-vsp.py with specified FOV |
 
 At peak brightness T CrB will saturate even with very short exposures in a telescope.
@@ -102,8 +102,8 @@ Two charts are pre-fetched and ready:
   | 28 | 2.78 | 8.3° — camera lens only |
   | 37 | 3.68 | β CrB, 7.7° — camera lens only |
   | 37 | 3.75 | 8.5° — camera lens only |
-  | 38 | 3.81 | γ CrB, 3.8° — RedCat51+full-frame or camera lens |
-  | 41 | 4.14 | ε CrB, 1.05° — **in every setup including Seestar** |
+  | 38 | 3.81 | γ CrB, 3.8° — RedCat 51 + full-frame or camera lens |
+  | 41 | 4.14 | ε CrB, 1.05° — **in every setup including Seestar S30 Pro** |
   | 45 | 4.52 | 7.5° — camera lens only |
   | 48 | 4.83 | 3.2° — camera lens only (north of T CrB) |
   | 50 | 4.99 | ι CrB, 4.0° — camera lens only |
