@@ -91,7 +91,7 @@ See `SECURITY_AUDIT.md` (gitignored).
 - [x] **Verification image stretch controls.** No Stretch / Auto / Boosted radio buttons embedded in the Verification step; re-render on change without leaving the dialog.
 - [x] **Ensemble photometry (`CNAME=ENSEMBLE`).** Six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars step runs a single DynamicPSF discovery pass on all in-frame V-band candidates; TreeBox shows V mag, Δmag, PSF quality, recommended flag. Default selection: up to 6 stars with Δmag ≤ 2.0 and good PSF. ZP = mean(magV_i − instMag_i); MERR = √(σ_ZP² + σ_T²). Report: `CNAME=ENSEMBLE`, `CMAG=na`, comp labels in NOTES. Single-comp case (N=1) identical to previous format. End-to-end tested with T CrB submission to AAVSO.
 - [x] **Multiband TB/TG** (blue channel)
-- [ ] **FOV-aware comparison star CSV.** Different instruments need different AAVSO VSP charts and CSVs. See details below.
+- [ ] **FOV-aware comparison star CSV.** Different instruments need different AAVSO VSP charts and CSVs. See details below. **Blocked** on AAVSO VSP API restoration (v2 migration incomplete); in the meantime pre-fetched CSVs for 60–900′ are in `charts/`.
 - [ ] User-specifiable **target star**
 - [ ] **TG→V** transformation (`TRANS=YES`)
 
