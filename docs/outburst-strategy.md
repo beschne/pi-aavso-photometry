@@ -71,11 +71,11 @@ and AAVSO report format apply.
 
 | T CrB brightness | Best instrument | Chart | Fetch command (if needed) |
 |-----------------|-----------------|-------|---------------------------|
-| ~10 mag (quiescence) | Seestar S30 Pro | `charts/X42615CFD.csv` (450′) | already available |
-| 8–10 mag (brightening) | Seestar S30 Pro | `charts/X42615CFQ.csv` (900′) | already available |
-| 4–8 mag | Seestar S30 Pro or RedCat 51 + APS-C | `charts/X42615CFQ.csv` (900′) | already available |
-| 2–4 mag | RedCat 51 + full-frame | `charts/X42615CHL.csv` (900′, maglimit 5) | already available |
-| ~2 mag (peak) | Camera lens | `charts/X42615CHL.csv` or AAVSO Alert Notice chart | follow Alert Notice; run fetch-vsp.py with specified FOV |
+| ~10 mag (quiescence) | Seestar S30 Pro | [`charts/X42615CFD.csv`](../charts/X42615CFD.png) (450′) | already available |
+| 8–10 mag (brightening) | Seestar S30 Pro | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | already available |
+| 4–8 mag | Seestar S30 Pro or RedCat 51 + APS-C | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | already available |
+| 2–4 mag | RedCat 51 + full-frame | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) (900′, maglimit 5) | already available |
+| ~2 mag (peak) | Camera lens | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) or AAVSO Alert Notice chart | follow Alert Notice; run fetch-vsp.py with specified FOV |
 
 At peak brightness T CrB will saturate even with very short exposures in a telescope.
 Use the shortest sub-second frames your camera allows; the script's reference-file time
@@ -90,10 +90,10 @@ matching CSV, or wait for the AAVSO VSP API to come back online (v2 migration).
 
 Two charts are pre-fetched and ready:
 
-- **`charts/X42615CFQ.csv`** — 900′, maglimit 14.5, 370 stars. Use at any brightness;
+- **[`charts/X42615CFQ.csv`](../charts/X42615CFQ.png)** — 900′, maglimit 14.5, 370 stars. Use at any brightness;
   the faint comp stars carry the ensemble at quiescence, and the bright ones (labels 22–50)
   cover the outburst range.
-- **`charts/X42615CHL.csv`** — 900′, maglimit 5, 9 stars (V 2.2–5.0). The outburst-focused
+- **[`charts/X42615CHL.csv`](../charts/X42615CHL.png)** — 900′, maglimit 5, 9 stars (V 2.2–5.0). The outburst-focused
   chart: fewer distractions, bright stars only. Stars it contains:
 
   | Label | V | Notes |

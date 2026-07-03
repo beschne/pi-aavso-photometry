@@ -78,11 +78,11 @@ Skript und AAVSO-Berichtsformat bleiben dieselben.
 
 | T-CrB-Helligkeit | Beste Ausrüstung | Karte | Befehl (falls neu laden nötig) |
 |-----------------|-----------------|-------|--------------------------------|
-| ~10 mag (Ruhe) | Seestar S30 Pro | `charts/X42615CFD.csv` (450′) | bereits vorhanden |
-| 8–10 mag (Aufhellung) | Seestar S30 Pro | `charts/X42615CFQ.csv` (900′) | bereits vorhanden |
-| 4–8 mag | Seestar S30 Pro oder RedCat 51 + APS-C | `charts/X42615CFQ.csv` (900′) | bereits vorhanden |
-| 2–4 mag | RedCat 51 + Vollformat | `charts/X42615CHL.csv` (900′, Grenzhelligkeit 5) | bereits vorhanden |
-| ~2 mag (Maximum) | Kameraobjektiv | `charts/X42615CHL.csv` oder Karte aus der AAVSO Alert Notice | Alert Notice folgen; fetch-vsp.py mit dem angegebenen Bildfeld ausführen |
+| ~10 mag (Ruhe) | Seestar S30 Pro | [`charts/X42615CFD.csv`](../charts/X42615CFD.png) (450′) | bereits vorhanden |
+| 8–10 mag (Aufhellung) | Seestar S30 Pro | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | bereits vorhanden |
+| 4–8 mag | Seestar S30 Pro oder RedCat 51 + APS-C | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | bereits vorhanden |
+| 2–4 mag | RedCat 51 + Vollformat | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) (900′, Grenzhelligkeit 5) | bereits vorhanden |
+| ~2 mag (Maximum) | Kameraobjektiv | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) oder Karte aus der AAVSO Alert Notice | Alert Notice folgen; fetch-vsp.py mit dem angegebenen Bildfeld ausführen |
 
 Am Maximum sättigt T CrB selbst bei sehr kurzen Belichtungen im Teleskop. Nimm die
 kürzestmöglichen Subframes im Sekundenbruchteil, die deine Kamera zulässt — die
@@ -99,10 +99,10 @@ nach der v2-Migration wieder läuft.
 
 Zwei Karten liegen bereits fertig vor:
 
-- **`charts/X42615CFQ.csv`** — 900′, Grenzhelligkeit 14,5, 370 Sterne. Bei jeder
+- **[`charts/X42615CFQ.csv`](../charts/X42615CFQ.png)** — 900′, Grenzhelligkeit 14,5, 370 Sterne. Bei jeder
   Helligkeit brauchbar: Die schwachen Vergleichssterne tragen in Ruhe das Ensemble,
   die hellen (Labels 22–50) decken den Ausbruchsbereich ab.
-- **`charts/X42615CHL.csv`** — 900′, Grenzhelligkeit 5, 9 Sterne (V 2,2–5,0). Die
+- **[`charts/X42615CHL.csv`](../charts/X42615CHL.png)** — 900′, Grenzhelligkeit 5, 9 Sterne (V 2,2–5,0). Die
   Ausbruchskarte: weniger Ablenkung, nur helle Sterne. Sie enthält:
 
   | Label | V | Hinweis |
