@@ -24,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.3.2";
+const VERSION = "1.4.0";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -2487,20 +2487,62 @@ class PhotometryDialog extends Dialog {
 
          // Check-star quality gate
          if ( _instMag_K !== null && _checkStar ) {
-            var checkStd = _ensembleZP + _instMag_K;
-            var checkDev = Math.abs( checkStd - _checkStar.magV );
+            var checkStd       = _ensembleZP + _instMag_K;
+            // Signed: >0 means the star measures FAINTER than its catalogue value,
+            // <0 means it measures BRIGHTER. Direction is a diagnostic hint below.
+            var checkDevSigned = checkStd - _checkStar.magV;
+            var checkDev       = Math.abs( checkDevSigned );
+            var tol            = 3.0 * _merr;
             console.writeln( "  Check " + _checkStar.label + ": derived " + format("%.3f",checkStd) +
                              "  catalogue V=" + format("%.3f",_checkStar.magV) +
-                             "  deviation " + format("%.3f",checkDev) );
-            if ( checkDev > 3.0 * _merr ) {
+                             "  deviation " + format("%+.3f",checkDevSigned) );
+            if ( checkDev > tol ) {
                _checkGateWarn = true;
-               console.warningln( "  Check star deviation > 3x MERR — possible systematic error." );
+               console.warningln( "  Check star deviation " + format("%+.3f",checkDevSigned) +
+                                   " mag exceeds 3x MERR (" + format("%.3f",tol) +
+                                   ") - possible systematic error." );
+
+               // Other in-frame candidates not currently used as comp or check - cheap to
+               // evaluate because the discovery pass already fit a PSF (instMag) for all of
+               // them, so no extra measurement is needed, just ZP + instMag per candidate.
+               var alts = _checkEligible
+                  .filter( function(e) { return e.star.label !== _checkStar.label && e.instMag !== null; } )
+                  .map( function(e) {
+                     var pred = _ensembleZP + e.instMag;
+                     return { label: String(e.star.label), magV: e.star.magV, pred: pred, dev: pred - e.star.magV };
+                  } )
+                  .sort( function(a,b) { return Math.abs(a.dev) - Math.abs(b.dev); } )
+                  .slice( 0, 5 );
+               if ( alts.length > 0 ) {
+                  console.writeln( "  Other eligible check-star candidates (not in comp ensemble), sorted by |deviation|:" );
+                  console.writeln( "    Label   V mag    Predicted   Deviation" );
+                  alts.forEach( function(a) {
+                     console.writeln( "    " + format( "%-7s %-8.3f %-11.3f %+.3f",
+                                       a.label, a.magV, a.pred, a.dev ) +
+                                       ( Math.abs(a.dev) <= tol ? "   (within tolerance)" : "" ) );
+                  });
+                  var best = alts[0];
+                  if ( Math.abs(best.dev) <= tol )
+                     console.writeln( "  Candidate " + best.label + " deviates least and is within tolerance - " +
+                                       "consider switching Check to " + best.label +
+                                       " in the Comp Stars step and re-running Photometry." );
+               }
+
+               var directionWord = checkDevSigned > 0 ? "fainter" : "brighter";
+               var directionHint = checkDevSigned > 0
+                  ? "Often a gradient, thin cloud, over-subtracted background, or a mismatched star."
+                  : "Often PSF blending with a neighbour.";
                self.checkGateLbl.text =
-                  "<b><font color='#cc6600'>⚠  Check star " + escHtml( _checkStar.label ) +
-                  ": deviation " + format( "%.3f", checkDev ) + " mag" +
-                  " &gt; 3\xd7 MERR (" + format( "%.3f", _merr ) + ")<br/>" +
-                  "Possible systematic error — wrong star, blending, or atmospheric gradient." +
-                  "</font></b>";
+                  "<b><font color='#cc6600'>⚠  Check star " + escHtml( _checkStar.label ) + " failed quality gate<br/>" +
+                  "</font></b><font color='#cc6600'>" +
+                  "Predicted " + format("%.3f",checkStd) + " TG vs catalogue " + format("%.3f",_checkStar.magV) +
+                  " V - off by " + format("%+.3f",checkDevSigned) + " mag (measures <b>" + directionWord +
+                  "</b> than catalogue).<br/>" +
+                  directionHint + "<br/>" +
+                  "Tolerance was 3\xd7MERR = 3\xd7" + format("%.3f",_merr) + " = " + format("%.3f",tol) + " mag.<br/>" +
+                  "See console for other candidate check stars, and the Verification step thumbnail " +
+                  "to look for blending near label " + escHtml( _checkStar.label ) + "." +
+                  "</font>";
                self.checkGateLbl.visible = true;
             }
          }

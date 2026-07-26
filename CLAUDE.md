@@ -259,7 +259,7 @@ Keep code structured so these are additions, not rewrites. In priority order:
 - ~~**(Priority 1) Selectable comp/check stars at runtime.**~~ Done: Comp/Check ComboBoxes in Setup; default = brightest/second-brightest in CSV; persisted in Settings.
 - ~~**Five-step wizard UI.**~~ Done: Setup → Photometry → Mid-time → Verification → Report. Photometry and report auto-trigger on step entry.
 - ~~**Annotated verification image.**~~ Done: embedded thumbnail in step 4 with No/Auto/Boosted stretch controls.
-- ~~**Check-star gate.**~~ Done: deviation > 3×MERR triggers orange warning in Photometry step and console.
+- ~~**Check-star gate.**~~ Done: deviation > 3×MERR triggers orange warning in Photometry step and console, with signed deviation, a brighter/fainter direction hint, and (in the console) up to 5 alternate in-frame candidates with their own deviations — no auto-switching, operator decides.
 - ~~**Real `MERR`.**~~ Done: PSF MAD residuals propagated via matched-filter formula; target + comp combined in quadrature.
 - ~~**Ensemble photometry.**~~ Done (v1.2.0): six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars TreeBox; single DynamicPSF discovery pass; ZP = mean(magV_i − instMag_i); `CNAME=ENSEMBLE`, `CMAG=na`; comp labels in NOTES. End-to-end tested with T CrB submission to AAVSO.
 

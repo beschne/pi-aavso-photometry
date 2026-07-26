@@ -256,7 +256,7 @@ Pre-fetched CSVs for T&nbsp;CrB at common field sizes are included in the <span 
 <dd><p>If a FITS HISTORY keyword contains the name of an incompatible process (stretch, deconvolution, BlurXTerminator, &hellip;), a red label lists the offending process names. This check is limited to processes recorded in the FITS keywords; see <a href="#__Requirements__">Requirements</a> for the known blind spot.</p></dd>
 
 <dt><p>Check-star gate (orange)</p></dt>
-<dd><p>If the check star&rsquo;s derived magnitude deviates from its catalogue V by more than 3&times;MERR, an orange label reports the deviation. This suggests a systematic problem such as a wrong star, blending, or poor atmospheric conditions. The report can still be exported, but the observation should be scrutinised before submission.</p></dd>
+<dd><p>If the check star&rsquo;s derived magnitude deviates from its catalogue V by more than 3&times;MERR, an orange label reports the predicted vs. catalogue value and the direction of the deviation: measuring <em>fainter</em> than catalogue often points to a gradient, thin cloud, or over-subtracted background; measuring <em>brighter</em> often points to PSF blending with a neighbour. The Process Console additionally lists up to 5 other in-frame candidates not currently used as comp or check, each with its own predicted-vs-catalogue deviation, so a candidate that would pass the gate is visible at a glance &mdash; the script does not switch the check star automatically. The report can still be exported, but the observation should be scrutinised before submission.</p></dd>
 </dl>
 
 </div>

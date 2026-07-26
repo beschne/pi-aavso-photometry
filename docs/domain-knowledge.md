@@ -140,7 +140,9 @@ $$\text{SNR} = \frac{A}{\sigma_A}, \qquad \sigma_\text{mag} = \frac{2.5}{\ln 10}
 
 $$\text{MERR} = \sqrt{\sigma_T^2 + \sigma_C^2}$$
 
-**Check-star quality gate (separate from MERR):** the check star's derived magnitude is standardised from the comp and compared to its catalogue V value. If the deviation exceeds $3 \times \text{MERR}$, a warning is printed to the console. This catches systematic errors (wrong star, blending, atmospheric gradient) that the noise model cannot detect.
+**Check-star quality gate (separate from MERR):** the check star's derived magnitude is standardised from the comp ensemble ZP and compared to its catalogue V value. If the (signed) deviation exceeds $3 \times \text{MERR}$ in absolute value, a warning is shown in the Photometry step and printed to the console. This catches systematic errors (wrong star, blending, atmospheric gradient) that the noise model cannot detect — it is a sanity check against a star whose true magnitude is already known, since T CrB's is not.
+
+The warning reports the signed deviation (`predicted − catalogue`) and a direction-based hint: a check star that measures **fainter** than catalogue often points to a gradient, thin cloud, over-subtracted background, or a mismatched star; one that measures **brighter** often points to PSF blending with a neighbour. It also lists up to 5 other in-frame candidates not currently used as comp or check, each with its own predicted-vs-catalogue deviation (computed for free from the cached discovery-pass instrumental magnitudes — no extra PSF fitting needed), sorted by `|deviation|`, so a candidate that would pass the gate is visible at a glance. The script does **not** auto-switch the check star — if the underlying cause is systemic (bad ensemble ZP, atmospheric gradient, plate-solve offset), most candidates would deviate similarly, and silently picking whichever agrees best would mask the problem instead of catching it. The operator decides.
 
 **Typical values:** for a 20–25 frame × 30 s Seestar stack of a ~10 mag target, MERR is typically 0.003–0.010 mag.
 
