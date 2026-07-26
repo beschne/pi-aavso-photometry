@@ -199,7 +199,7 @@ Full field spec and comp/check star table: `docs/aavso-extended-format.md`.
 `NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES`
 
 Key choices: `TRANS=NO`, `MTYPE=STD` (not `DIF`), `OBSTYPE=CCD` (Seestar is a dedicated astronomy camera, not a consumer DSLR), `CHART=X42597QE`, `GROUP=na`.
-The report contains **one observation line per measured band**: `FILT=TG` always; `FILT=TB` when the blue-channel PSF converges and at least one comp star has a B-band catalogue magnitude (all stars in a standard AAVSO VSP export do). `CMAG`/`KMAG` are **instrumental** magnitudes from the same channel as the observation line (can be negative). Output via `SaveFileDialog` on every run (not persisted).
+The report contains **one observation line per measured band**: `FILT=TG` always; `FILT=TB` when the blue-channel PSF converges and at least one comp star has a B-band catalogue magnitude (all stars in a standard AAVSO VSP export do). `CMAG`/`KMAG` are **instrumental** magnitudes from the same channel as the observation line (can be negative) — **except** when `CNAME=ENSEMBLE`: then `CMAG=na` and `KMAG` is the check star's magnitude standardised the same way as the target (`ZP + instMag_check`), per AAVSO HQ guidance — see `docs/aavso-extended-format.md`. Output via `SaveFileDialog` on every run (not persisted).
 
 Default comp/check: the two stars closest in V magnitude to `TARGET.magQuiescence` (10.0 V). For chart X42597QE at quiescence this yields label `98` (9.809 V, Δ=0.19) and `106` (10.554 V, Δ=0.55).
 
@@ -237,7 +237,7 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). T
 | **0 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); CSV path + Browse; **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
 | **1 — Comp Stars** | `compStarsPanel` | TreeBox (5 cols: ✓, Label, AUID, V mag, Δmag, Quality) listing all in-frame V-band candidates; **Check** ComboBox at bottom; `updateCompCount()` label |
 | **2 — Photometry** | `runPanel` | TG magnitude + MERR; TB magnitude + MERR (shows — if blue PSF rejected or no B-band comp data available); TG PSF flux row (instrumental mags); `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation, TG only) |
-| **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
+| **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; Frames (editable, auto-filled, + "Locate…" button to read exact count from a master XISF's processing history) / EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
 | **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = red circle, comp stars = green, check = cyan); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
 | **5 — Report** | `reportPanel` | Format RadioButtons (Human readable default, AAVSO Extended); scrollable read-only `TextBox` preview; Export button (opens `SaveFileDialog`, writes immediately) |
 
@@ -268,6 +268,12 @@ Keep code structured so these are additions, not rewrites. In priority order:
 
 - **(Low priority — scientific extensions)**
   - **TG→V transformation** (`TRANS=YES`) with once-derived coefficients.
+
+- **(Ideas, not scoped — from a 2026-07-26 external analysis of a bad check-star deviation; only the KMAG ensemble-standardisation part of that analysis was implemented, see `docs/aavso-extended-format.md`)**
+  - **Check-star gate that rejects instead of warns.** Today `checkGateLbl` only warns when the check-star deviation exceeds 3×MERR; the run still completes and can still be exported. A hard gate (tolerance = `max(0.05, 3σ)` where σ combines the ensemble ZP transfer error and the check star's catalogue error) would refuse to generate/export a report until the operator fixes the underlying issue. Would need a UI decision on how to surface a hard block vs. today's soft warning.
+  - **Split MERR into measurement error vs. transfer error**, with a photon-noise floor (needs gain/read noise from FITS/EGAIN and effective aperture area from the PSF fit) so small stacks don't report an implausibly small MERR from a scatter estimate with too few degrees of freedom. **Blocked:** needs per-frame instrumental magnitudes; the script currently only measures the already-integrated master, not individual subs, so this would be a real architecture change, not a drop-in formula.
+  - **Twilight/sun-altitude gate** before measurement (reject if sun is above some altitude threshold, e.g. −18°). Low cost to add (pure spherical-trig JS, no dependency) but needs lat/lon, which today are only entered in the Mid-time step, after Photometry has already run — would need reordering or duplicating the site-coordinate read earlier in the wizard.
+  - Also flagged: prefer AUID over chart label in `KNAME` where available (already existing guidance, not new), and consider a VPhot-style expanded `NOTES` field (`KMAGINS`, `KREFMAG`, `KREFERR`, `KRESID`, `NCOMP`, `SIGZP`, `NFRAMES`, `SUNALT`, …) so a submitted line is fully reconstructable after the fact — worth doing regardless of whether the gates above are ever added.
 
 ## Coding conventions
 

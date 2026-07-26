@@ -31,9 +31,9 @@ Authoritative spec: <https://www.aavso.org/aavso-extended-file-format> — verif
 | `TRANS` | `NO` | No transformation to a standard system |
 | `MTYPE` | `STD` | Standardised — **not** `DIF` |
 | `CNAME` | AUID | Comparison star AUID (≤20 chars); prefer AUID over chart label |
-| `CMAG` | instrumental | Comp star's **raw instrumental** magnitude (can be negative) |
+| `CMAG` | instrumental | Comp star's **raw instrumental** magnitude (can be negative); `na` when `CNAME=ENSEMBLE` |
 | `KNAME` | AUID | Check star AUID; must differ from `CNAME` |
-| `KMAG` | instrumental | Check star's raw instrumental magnitude |
+| `KMAG` | instrumental, or standardised for ensembles | Check star's raw instrumental magnitude for a single comp star; **ensemble-standardised** (ZP + instrumental) when `CNAME=ENSEMBLE` — see below |
 | `AMASS` | computed | Airmass at mid-exposure — see `domain-knowledge.md` |
 | `GROUP` | `na` | |
 | `CHART` | `X42597QE` | |
@@ -47,6 +47,8 @@ Use `STD`. With `STD`, the target magnitude is standardised via the comp star's 
 
 AAVSO HQ prefers raw instrumental values here so they can derive zero points and re-standardise later. Negative numbers are expected and fine.
 
+**Exception — `CNAME=ENSEMBLE`:** per AAVSO HQ guidance, once an ensemble is used, `CMAG` is `na` (no single comp star to report) and `KMAG` stops being instrumental — it must be the check star's magnitude standardised the same way as the target: `ZP + instMag_check`, where `ZP` is the ensemble zero-point (mean of `magBand_i − instMag_i` over the kept comp stars). This is a real AAVSO rule, not a script-specific choice: *"If you are doing ENSEMBLE, the definition of the data for KMAG is no longer instrumental mag of the check star but should be that star's magnitude standardized in the same fashion as the target star, with the ensemble."* The single-comp-star case (`CNAME` = comp AUID) is unaffected — `CMAG`/`KMAG` stay raw instrumental there.
+
 ## Comp/check star selection (T CrB at quiescence ~10.0 V)
 
 | Label | AUID | V mag | Role | Notes |
@@ -59,6 +61,6 @@ AAVSO HQ prefers raw instrumental values here so they can derive zero points and
 
 Default pairing at quiescence: comp=`98`, check=`106` (or swap). Near outburst, use brighter comps (`84`, `79`) — see Roadmap in CLAUDE.md.
 
-## Ensemble photometry (future)
+## Ensemble photometry
 
-When multiple comp stars are used, set `CNAME=ENSEMBLE`, `CMAG=na`, keep one dedicated check star in `KNAME`/`KMAG` (must **not** be part of the ensemble), and list comp AUIDs/labels in `NOTES`. Mind the ~100-char `NOTES` limit.
+When multiple comp stars are used, set `CNAME=ENSEMBLE`, `CMAG=na`, keep one dedicated check star in `KNAME` (must **not** be part of the ensemble) with `KMAG` standardised as described above, and list comp AUIDs/labels in `NOTES`. Mind the ~100-char `NOTES` limit.

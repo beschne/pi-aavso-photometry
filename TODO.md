@@ -50,7 +50,7 @@
 - [x] `SaveFileDialog` on every run; enforce `.txt` / `.csv` / `.tsv` extension
 - [x] Write file header: `#TYPE`, `#OBSCODE`, `#SOFTWARE`, `#DELIM`, `#DATE`, `#OBSTYPE`
 - [x] Write observation line with all 15 fields (see `docs/aavso-extended-format.md`)
-- [x] `CMAG` / `KMAG` = instrumental magnitudes (not catalogue); `MTYPE=STD`; `TRANS=NO`
+- [x] `CMAG` / `KMAG` = instrumental magnitudes (not catalogue), except `KMAG` is ensemble-standardised when `CNAME=ENSEMBLE`; `MTYPE=STD`; `TRANS=NO`
 - [x] Echo full output to Process Console
 
 ---

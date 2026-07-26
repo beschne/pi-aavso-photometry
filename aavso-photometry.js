@@ -24,7 +24,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.3.1";
+const VERSION = "1.3.2";
 
 // --- Target star -------------------------------------------------
 // Factored as an object so other targets can be added later.
@@ -1510,7 +1510,27 @@ class PhotometryDialog extends Dialog {
 
       this.framesEdit = new Edit( midtimePanel );
       this.framesEdit.setFixedWidth( 60 );
-      this.framesEdit.toolTip = "Number of integrated subframes (from PixInsight processing history)";
+      this.framesEdit.toolTip = "Number of integrated subframes (from PixInsight processing history). " +
+                                 "Auto-filled on entering this step; edit freely if the auto-detected value is wrong.";
+
+      this.locateFramesBtn = new ToolButton( midtimePanel );
+      this.locateFramesBtn.icon = this.scaledResource( ":/icons/folder-open.png" );
+      this.locateFramesBtn.setScaledFixedSize( 20, 20 );
+      this.locateFramesBtn.toolTip =
+         "Locate the master XISF file to read the exact frame count from its processing history.\n" +
+         "Use this if the auto-filled count looks wrong (e.g. the master's original file path no longer exists).";
+      this.locateFramesBtn.onClick = function() {
+         var path = openSubDialog( "Locate master light XISF to read frame count" );
+         if ( !path ) return;
+         var n = readXISFFrameCount( path );
+         if ( n > 0 ) {
+            self.framesEdit.text = String( n );
+            console.writeln( "Frame count: " + n + " (from ProcessingHistory, user-located file)" );
+         } else {
+            new MessageBox( "No ImageIntegration processing history found in that file.",
+                             TITLE, StdIcon.Warning, StdButton.Ok ).execute();
+         }
+      };
 
       var exptimeTag = new Label( midtimePanel );
       exptimeTag.text          = "Exp/sub:";
@@ -1524,6 +1544,7 @@ class PhotometryDialog extends Dialog {
       exptimeRow.spacing = 8;
       exptimeRow.add( framesTag );
       exptimeRow.add( this.framesEdit );
+      exptimeRow.add( this.locateFramesBtn );
       exptimeRow.add( exptimeTag );
       exptimeRow.add( this.exptimeEdit );
       exptimeRow.addStretch();
@@ -1848,7 +1869,7 @@ class PhotometryDialog extends Dialog {
          var dateStr = !isNaN(self.midJD)
             ? jdToISO( self.midJD ).substring( 0, 10 )
             : format( "%04d-%02d-%02d", _now.getFullYear(), _now.getMonth() + 1, _now.getDate() );
-         var suggestedName = "tcrb_photometry_" + dateStr;
+         var suggestedName = "tcrb_photometry_" + dateStr + ( self.rbHuman.checked ? "_human" : "" );
          var lastDir = Settings.read( SETTINGS_LAST_DIR, DataType_String )
             || ( (_window && !_window.isNull && _window.filePath)
                  ? File.extractDirectory( _window.filePath )
@@ -2286,15 +2307,11 @@ class PhotometryDialog extends Dialog {
          // 1) ProcessingHistory from the XISF file on disk — reads only the 282 KB XML header,
          //    not the image data.  View.propertyValue("PixInsight:ProcessingHistory") always
          //    returns null (the property is never loaded into memory), so we read the file directly.
+         // This step runs automatically every time the Photometry step is entered, so it must
+         // never block on a modal dialog — if the recorded path is stale (file moved, project
+         // relocated, different machine), just fall through silently to methods 2/3 below; the
+         // frame count is only used for the informational "Frames" field, not for the photometry.
          var _xisfPath = _window.filePath;
-         if ( _xisfPath && !File.exists( _xisfPath ) ) {
-            // File has moved (PI project relocated, different machine, etc.).
-            // Offer the user a chance to locate it so the exact frame count can be read.
-            var _relDlg = new OpenFileDialog();
-            _relDlg.caption = "Locate master light XISF to read frame count";
-            _relDlg.filters = [["XISF Files", "*.xisf"]];
-            _xisfPath = _relDlg.execute() ? _relDlg.filePath : null;
-         }
          if ( _xisfPath && File.exists( _xisfPath ) ) {
             var _nHist = readXISFFrameCount( _xisfPath );
             if ( _nHist > 0 ) { _n = _nHist; _nSource = "ProcessingHistory"; }
@@ -2636,6 +2653,13 @@ class PhotometryDialog extends Dialog {
          var cname = N === 1 ? sanitizeField( _ensembleEntries[0].star.auid ) : "ENSEMBLE";
          var cmag  = N === 1 ? format( "%.4f", _instMag_Cs[0] ) : "na";
          var kname = _checkStar ? sanitizeField( _checkStar.auid ) : "na";
+         // KMAG: for a single comp star this is the check star's raw instrumental
+         // magnitude, matching CMAG. For an ensemble (N>1), AAVSO wants KMAG
+         // standardised the same way as the target (ZP + instrumental) — it is
+         // no longer an instrumental value once CNAME=ENSEMBLE.
+         var kmagOut = ( N > 1 && _instMag_K !== null && !isNaN( _ensembleZP ) )
+                     ? format( "%.4f", _ensembleZP + _instMag_K )
+                     : kmag;
          var tgLine = [
             TARGET.name,
             format( "%.6f", midJD      ),
@@ -2643,7 +2667,7 @@ class PhotometryDialog extends Dialog {
             format( "%.3f", _merr      ),
             "TG", "NO", "STD",
             cname, cmag,
-            kname, kmag,
+            kname, kmagOut,
             amassStr,
             "na", CHART,
             sanitizeField( notes ),
@@ -2652,7 +2676,13 @@ class PhotometryDialog extends Dialog {
          if ( tbNotes !== null ) {
             var tbCmag  = ( N === 1 && _instMag_Cs_B[0] !== null && _instMag_Cs_B[0] !== undefined )
                         ? format( "%.4f", _instMag_Cs_B[0] ) : "na";
-            var tbKmag  = ( _instMag_K_B !== null ) ? format( "%.4f", _instMag_K_B ) : "na";
+            var tbKmag;
+            if ( _instMag_K_B === null )
+               tbKmag = "na";
+            else if ( N > 1 && !isNaN( _ensembleZP_B ) )
+               tbKmag = format( "%.4f", _ensembleZP_B + _instMag_K_B );
+            else
+               tbKmag = format( "%.4f", _instMag_K_B );
             var tbLine  = [
                TARGET.name,
                format( "%.6f", midJD        ),
