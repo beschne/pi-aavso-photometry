@@ -2,8 +2,9 @@
 
 Branch: `generic-target` (from `main` at v1.4.0). `main` stays the T CrB release.
 Status: **steps 1–8 done (2.0.0-dev).** Tested in PixInsight on a T CrB master:
-identical result to v1.4.0. Security audit done (no open findings). Open: rest of step 9 (second target,
-manual coordinates, unsaved stack), then `2.0.0-rc.1`.
+identical result to v1.4.0; manual coordinates, unknown name and unsaved stack
+also pass. Security audit done (no open findings). Open: a second target (needs a
+clear night; SS Cyg planned), then `2.0.0-rc.1`.
 Last updated 2026-10-28.
 
 ## Goal
@@ -176,9 +177,13 @@ CSV file picker is removed.
   target coordinates, CSV writer, URL builder, manual RA/Dec parsing, FOV
   sizing (centred, corner, clamped), target-magnitude estimate. The harness is
   not in the repo (the project rule is PJSR only).
-- In PixInsight (user): T CrB master — compare result against a v1.4.0 run on
-  the same file; then a second target; then the unknown-name / manual RA/Dec path;
-  then an unsaved in-memory stack.
+- In PixInsight (user), 2026-10-28 on a T CrB master:
+  - ✓ compared with a v1.4.0 run on the same file — identical magnitudes, MERR and comps
+  - ✓ manual RA/Dec — request by `ra=239.87567&dec=25.92017&fov=180&maglimit=14.5`
+  - ✓ unknown name (`T CrX`) — VSX error shown, **Coordinates** ticked automatically
+  - ✓ unsaved in-memory stack — discovery and export work
+  - ✓ busy guard — closing and step clicks blocked during discovery
+  - ☐ second target — waiting for a clear night (SS Cyg first choice)
 
 ## Open points
 
