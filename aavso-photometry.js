@@ -27,7 +27,7 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "2.0.0-dev";
+const VERSION = "2.0.0-rc.1";
 
 // --- Target star -------------------------------------------------
 // Filled at run time (Comp Stars step) from the object name entered in

@@ -1,10 +1,12 @@
 # Plan: generic target, automatic comparison stars
 
 Branch: `generic-target` (from `main` at v1.4.0). `main` stays the T CrB release.
-Status: **steps 1–9 done (2.0.0-dev).** Tested in PixInsight on a T CrB master
+Status: **steps 1–9 done; `2.0.0-rc.1`.** Tested in PixInsight on a T CrB master
 (identical result to v1.4.0; manual coordinates, unknown name and unsaved stack
 also pass) and on SS Cyg (second target; found and fixed the duplicate-label
-bug). Security audit done (no open findings). Next: `2.0.0-rc.1`.
+bug). Security audit done (no open findings). The real report for the rc step
+is the SS Cyg submission of 2026-10-28 (made with 2.0.0-dev, same code as rc.1).
+Next: merge to `main` as `2.0.0`.
 Last updated 2026-10-28.
 
 ## Goal
@@ -170,7 +172,7 @@ CSV file picker is removed.
   3. After merging to `main`: `VERSION = "2.0.0"`, tag `v2.0.0`, GitHub Release
      (see `PRIVATE_NOTES.md`).
   - At each step, also update the help-page footer in `docs/Photometry.html`
-    (currently `2.0.0-dev`).
+    (currently `2.0.0-rc.1`).
   - `main` stays at 1.4.0; urgent T CrB fixes ship from `main` as 1.4.x.
 - Repeat the security audit (`SECURITY_AUDIT.md`) — new network input and new
   file writes.
