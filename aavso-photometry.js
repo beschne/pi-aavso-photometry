@@ -724,7 +724,7 @@ function findKeyword( kws, name ) {
 }
 
 // Remove characters that would corrupt the comma-delimited AAVSO report format.
-// Applied to every field sourced from CSV or FITS before interpolation into the data line.
+// Applied to every field sourced from AAVSO VSP or FITS before interpolation into the data line.
 function sanitizeField( s ) {
    return String( s ).replace( /[,\r\n]/g, " " ).trim();
 }
@@ -1072,7 +1072,7 @@ class PhotometryDialog extends Dialog {
       var _seq           = null;    // VSP comparison sequence (fetchVspSequence result)
       var _seqKey        = "";      // request that produced _seq — reused while inputs are unchanged
       var _busy          = false;   // true while discovery or a chart download at export runs
-      var _tcrb_mag      = NaN;
+      var _targetMag     = NaN;
       var _merr          = NaN;
       var _instMag_T     = null;
       var _instMag_K     = null;
@@ -1092,7 +1092,7 @@ class PhotometryDialog extends Dialog {
       var _targetPix      = null; // cached from discovery
       var _targetPSF      = null; // cached from discovery (green/TG)
       var _targetPSF_B    = null; // cached from discovery (blue/TB)
-      var _tcrb_mag_B     = NaN;
+      var _targetMag_B    = NaN;
       var _merr_B         = NaN;
       var _instMag_T_B    = null;
       var _instMag_Cs_B   = [];
@@ -1552,7 +1552,7 @@ class PhotometryDialog extends Dialog {
 
       this.compCheckLbl = new Label( runPanel );
       this.compCheckLbl.text = "—";
-      this.compCheckLbl.toolTip = "Comp and check stars used for this run (from the CSV loaded in Setup)";
+      this.compCheckLbl.toolTip = "Comp and check stars used for this run (from the AAVSO comparison sequence)";
 
       this.warningLbl = new Label( runPanel );
       this.warningLbl.useRichText = true;
@@ -2730,7 +2730,7 @@ class PhotometryDialog extends Dialog {
          _instMag_K       = null;
          _ensembleZP      = NaN;
          _checkGateWarn   = false;
-         _tcrb_mag_B      = NaN;
+         _targetMag_B     = NaN;
          _merr_B          = NaN;
          _instMag_T_B     = null;
          _instMag_Cs_B    = [];
@@ -2886,7 +2886,7 @@ class PhotometryDialog extends Dialog {
             throw new Error( "None of the selected comp stars produced a valid flux." );
 
          _ensembleZP = zpValues.reduce( function(a,b) { return a+b; } ) / zpValues.length;
-         _tcrb_mag   = _ensembleZP + _instMag_T;
+         _targetMag  = _ensembleZP + _instMag_T;
 
          // MERR = sqrt(sigZP^2 + sigT^2)
          var sigT  = psfMagError( _targetPSF );
@@ -2911,7 +2911,7 @@ class PhotometryDialog extends Dialog {
          // Console summary
          // Name by concatenation, not %ls: format() garbles non-ASCII text
          console.writeln( "  " + TARGET.name + format( " = %.3f TG   MERR = %.3f   ZP = %.4f",
-                                                        _tcrb_mag, _merr, _ensembleZP ) );
+                                                        _targetMag, _merr, _ensembleZP ) );
          console.writeln( "  inst T = " + format( "%.4f", _instMag_T ) +
                           "  sigT=" + ( sigT !== null ? format("%.4f",sigT) : "n/a" ) );
          _ensembleEntries.forEach( function(e, i) {
@@ -2945,7 +2945,7 @@ class PhotometryDialog extends Dialog {
             });
             if ( zpValuesB.length > 0 ) {
                _ensembleZP_B = zpValuesB.reduce( function(a,b) { return a+b; } ) / zpValuesB.length;
-               _tcrb_mag_B   = _ensembleZP_B + _instMag_T_B;
+               _targetMag_B  = _ensembleZP_B + _instMag_T_B;
                var sigT_B = psfMagError( _targetPSF_B );
                var sigZP_B;
                if ( zpValuesB.length >= 2 ) {
@@ -2963,7 +2963,7 @@ class PhotometryDialog extends Dialog {
                if ( _merr_B === 0.999 )
                   console.warningln( "TB MERR: PSF noise estimation failed — set to 0.999" );
                console.writeln( "  " + TARGET.name + format( " = %.3f TB   MERR = %.3f   ZP_B = %.4f",
-                                                              _tcrb_mag_B, _merr_B, _ensembleZP_B ) );
+                                                              _targetMag_B, _merr_B, _ensembleZP_B ) );
                console.writeln( "  TB inst T = " + format( "%.4f", _instMag_T_B ) );
                _ensembleEntries.forEach( function(e, i) {
                   if ( _instMag_Cs_B[i] !== null )
@@ -3064,9 +3064,9 @@ class PhotometryDialog extends Dialog {
             "Comp: " + cname + "    Check: " +
             ( _checkStar ? _checkStar.label + " (" + format("%.3f",_checkStar.magV) + " V)" : "none" );
 
-         self.magLbl.text    = format( "%.3f", _tcrb_mag );
+         self.magLbl.text    = format( "%.3f", _targetMag );
          self.merrLbl.text   = format( "%.3f", _merr );
-         self.tbMagLbl.text  = !isNaN( _tcrb_mag_B ) ? format( "%.3f", _tcrb_mag_B ) : "—";
+         self.tbMagLbl.text  = !isNaN( _targetMag_B ) ? format( "%.3f", _targetMag_B ) : "—";
          self.tbMerrLbl.text = !isNaN( _merr_B )     ? format( "%.3f", _merr_B )     : "—";
 
          var instLine = TARGET.name + ": " + format( "%.4f", _instMag_T );
@@ -3122,7 +3122,7 @@ class PhotometryDialog extends Dialog {
                    + (moonVal   ? "; " + moonVal   : "");
 
          var tbNotes = null;
-         if ( !isNaN(_tcrb_mag_B) ) {
+         if ( !isNaN(_targetMag_B) ) {
             var tbCompList = _ensembleEntries
                .filter( function(e) { return e.star.magB !== null && e.instMagB !== null; } )
                .map( function(e) { return starId( e.star ); } ).join("+");
@@ -3156,9 +3156,9 @@ class PhotometryDialog extends Dialog {
             bar,
             "",
             kv( "Target",          TARGET.name                                        ),
-            kv( "Magnitude (TG)",  format( "%.3f", _tcrb_mag ) + " TG"               ),
+            kv( "Magnitude (TG)",  format( "%.3f", _targetMag ) + " TG"               ),
             kv( "Error (TG)",      format( "%.3f", _merr     )                        ),
-            kv( "Magnitude (TB)",  tbNotes !== null ? format( "%.3f", _tcrb_mag_B ) + " TB" : "—" ),
+            kv( "Magnitude (TB)",  tbNotes !== null ? format( "%.3f", _targetMag_B ) + " TB" : "—" ),
             kv( "Error (TB)",      tbNotes !== null ? format( "%.3f", _merr_B )               : "—" ),
             "",
             kv( "Date (UTC)",      jdToISO( midJD )                                  ),
@@ -3220,7 +3220,7 @@ class PhotometryDialog extends Dialog {
          var tgLine = [
             sanitizeField( TARGET.name ),
             format( "%.6f", midJD      ),
-            format( "%.3f", _tcrb_mag  ),
+            format( "%.3f", _targetMag  ),
             format( "%.3f", _merr      ),
             "TG", "NO", "STD",
             cname, cmag,
@@ -3243,7 +3243,7 @@ class PhotometryDialog extends Dialog {
             var tbLine  = [
                sanitizeField( TARGET.name ),
                format( "%.6f", midJD        ),
-               format( "%.3f", _tcrb_mag_B  ),
+               format( "%.3f", _targetMag_B  ),
                format( "%.3f", _merr_B      ),
                "TB", "NO", "STD",
                cname, tbCmag,

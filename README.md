@@ -105,6 +105,8 @@ notes. Δmag is measured from a preliminary estimate of the target's brightness 
 this image, so no catalogue magnitude of the target is needed. Stars that pass quality
 checks and are within 2 magnitudes of the target are pre-ticked as the ensemble.
 Click any row to toggle it. Select the **Check star** from the dropdown at the bottom.
+Wide charts can give two stars of similar magnitude the same label; they appear as
+separate rows, and the report names them by AUID.
 
 The download is reused while the image, object, coordinates and mag limit stay the
 same, so going back and forth between steps does not repeat it.

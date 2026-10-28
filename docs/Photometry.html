@@ -214,7 +214,7 @@
 
 <dl class="pidoc_list">
 <dt><p>Star table</p></dt>
-<dd><p>Each row shows the star&rsquo;s AAVSO chart label, AUID, catalogue V magnitude, &Delta;mag from the target, and PSF quality notes. A check mark in the first column indicates the star is included in the ensemble. Click any row to toggle inclusion. Stars outside the image frame, flagged as blended, or failing PSF quality checks are shown greyed out and cannot be selected.</p></dd>
+<dd><p>Each row shows the star&rsquo;s AAVSO chart label, catalogue V magnitude, &Delta;mag from the target, and PSF quality notes. Wide charts can give two stars of similar magnitude the same label; they are listed as separate rows. A check mark in the first column indicates the star is included in the ensemble. Click any row to toggle inclusion. Stars outside the image frame or flagged as blended are not listed; stars failing PSF quality checks are listed with the reason in the notes column and are not pre-selected.</p></dd>
 
 <dt><p>Check star</p></dt>
 <dd><p>Selected from the drop-down at the bottom of the panel. The check star is kept separate from the ensemble; it is not used to compute the zero-point. Its derived magnitude is compared to catalogue as an independent quality gate; a deviation greater than 3&times;MERR triggers an orange warning on the Photometry step.</p></dd>
@@ -233,13 +233,13 @@
 
 <dl class="pidoc_list">
 <dt><p>TG magnitude and MERR</p></dt>
-<dd><p>The derived magnitude of T&nbsp;CrB in the TG band (green OSC channel, calibrated against V-band catalogue magnitudes) and its error MERR. MERR is propagated from the PSF fit residuals (MAD) of both the target and the comparison ensemble, combined in quadrature using a matched-filter formula.</p></dd>
+<dd><p>The derived magnitude of the target in the TG band (green OSC channel, calibrated against V-band catalogue magnitudes) and its error MERR. MERR is propagated from the PSF fit residuals (MAD) of both the target and the comparison ensemble, combined in quadrature using a matched-filter formula.</p></dd>
 
 <dt><p>TB magnitude and MERR</p></dt>
-<dd><p>The derived magnitude of T&nbsp;CrB in the TB band (blue OSC channel, calibrated against B-band catalogue magnitudes) and its error. Computed from an independent PSF fit to the blue channel. Shown as &ldquo;&mdash;&rdquo; if the blue-channel PSF for the target was rejected by the quality filter; this is uncommon with well-exposed data. All comparison stars in a standard AAVSO VSP export include B-band catalogue magnitudes, so the TB result is available by default.</p></dd>
+<dd><p>The derived magnitude of the target in the TB band (blue OSC channel, calibrated against B-band catalogue magnitudes) and its error. Computed from an independent PSF fit to the blue channel. Shown as &ldquo;&mdash;&rdquo; if the blue-channel PSF for the target was rejected by the quality filter; this is uncommon with well-exposed data. All comparison stars in a standard AAVSO VSP export include B-band catalogue magnitudes, so the TB result is available by default.</p></dd>
 
 <dt><p>TG PSF flux (instrumental magnitudes)</p></dt>
-<dd><p>The green-channel instrumental magnitudes &minus;2.5&nbsp;log<sub>10</sub>(flux) for the target (T&nbsp;CrB), the ensemble comp stars, and the check star, with labels. These are the raw values before the catalogue offset is applied; negative values are normal for bright stars. Blue-channel instrumental magnitudes are printed in the Process Console.</p></dd>
+<dd><p>The green-channel instrumental magnitudes &minus;2.5&nbsp;log<sub>10</sub>(flux) for the target, the ensemble comp stars, and the check star, with labels. These are the raw values before the catalogue offset is applied; negative values are normal for bright stars. Blue-channel instrumental magnitudes are printed in the Process Console.</p></dd>
 
 <dt><p>Ensemble / Check star</p></dt>
 <dd><p>The number of ensemble comp stars (N) and their combined zero-point, plus the AAVSO chart label and catalogue V magnitude of the check star.</p></dd>
@@ -285,10 +285,10 @@
 <dd><p>Observer site coordinates, pre-filled from FITS keywords (<span class="pidoc_code">SITELAT</span>, <span class="pidoc_code">SITELONG</span>, <span class="pidoc_code">SITEELEV</span> and synonyms). All three fields are editable. Longitude is degrees East-positive. Elevation defaults to 0&nbsp;m if absent. If Lat or Lon remain blank, the report writes <span class="pidoc_code">AMASS=na</span>, which is valid per the AAVSO Extended File Format specification.</p></dd>
 
 <dt><p>Airmass</p></dt>
-<dd><p>Computed using the Kasten &amp; Young (1989) formula from the confirmed mid-time JD, the observer site coordinates, and T&nbsp;CrB&rsquo;s J2000 position. Shown as a read-only readout; written as <span class="pidoc_code">AMASS</span> in the report.</p></dd>
+<dd><p>Computed using the Kasten &amp; Young (1989) formula from the confirmed mid-time JD, the observer site coordinates, and the target&rsquo;s J2000 position. Shown as a read-only readout; written as <span class="pidoc_code">AMASS</span> in the report.</p></dd>
 
 <dt><p>Moon</p></dt>
-<dd><p>Approximate lunar phase (percentage illumination) and angular separation from T&nbsp;CrB at the mid-time, shown as a sanity check. Not written to the report.</p></dd>
+<dd><p>Approximate lunar phase (percentage illumination) and angular separation from the target at the mid-time, shown as a sanity check. Not written to the report.</p></dd>
 </dl>
 
 </div>
@@ -300,13 +300,13 @@
 <img src="images/verification.png" alt="Verification step"/>
 </div>
 
-<p>This step displays an annotated thumbnail of the image centred on T&nbsp;CrB. Confirm that the coloured circles land on the correct stars before exporting the report.</p>
+<p>This step displays an annotated thumbnail of the image centred on the target. Confirm that the coloured circles land on the correct stars before exporting the report.</p>
 
 <dl class="pidoc_list">
 <dt><p>Annotation circles</p></dt>
 <dd>
 <ul class="pidoc_list">
-<li><strong>Red</strong> &mdash; T&nbsp;CrB (the target)</li>
+<li><strong>Red</strong> &mdash; the target</li>
 <li><strong>Green</strong> &mdash; ensemble comparison stars</li>
 <li><strong>Cyan</strong> &mdash; check star (Check)</li>
 </ul>
@@ -430,7 +430,7 @@
 <dd><p><span class="pidoc_code">STD</span> &mdash; standard (not differential) magnitude output.</p></dd>
 
 <dt><p>CNAME</p></dt>
-<dd><p>When N&nbsp;=&nbsp;1: AUID of the single comparison star (e.g. <span class="pidoc_code">000-BBW-796</span>). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">ENSEMBLE</span>. The list of ensemble star labels appears in NOTES.</p></dd>
+<dd><p>When N&nbsp;=&nbsp;1: AUID of the single comparison star (e.g. <span class="pidoc_code">000-BBW-796</span>). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">ENSEMBLE</span>. The ensemble stars are listed in NOTES.</p></dd>
 
 <dt><p>CMAG</p></dt>
 <dd><p>When N&nbsp;=&nbsp;1: instrumental magnitude of the comparison star in the same channel as the observation (can be negative). When N&nbsp;&gt;&nbsp;1: <span class="pidoc_code">na</span>. Per AAVSO spec for <span class="pidoc_code">MTYPE=STD</span> with ensemble.</p></dd>
@@ -451,7 +451,7 @@
 <dd><p>Chart ID of the comparison sequence downloaded from AAVSO VSP for this run (e.g. <span class="pidoc_code">X43358CRK</span>).</p></dd>
 
 <dt><p>NOTES</p></dt>
-<dd><p>Script name and version; for ensemble observations, also lists the comp star labels used (e.g. <span class="pidoc_code">comp 98+106+93;</span>).</p></dd>
+<dd><p>Band and method, the comparison stars used and the check star, stack size, and moon. Comparison stars are given by chart label, or by AUID when the label occurs more than once in the chart (e.g. <span class="pidoc_code">TG green channel; DynamicPSF; comp 98+106+93; check 81; 40 frames x 10.0s; moon 12%, 30&deg; above horizon</span>). The software name and version are in the file header (<span class="pidoc_code">#SOFTWARE</span>).</p></dd>
 </dl>
 
    </div>

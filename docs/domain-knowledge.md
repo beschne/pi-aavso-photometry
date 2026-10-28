@@ -41,6 +41,11 @@ CCD/OSC observers must cite the **chart ID** from the photometry sequence in the
 
 **Size limit:** charts larger than 180′ are only allowed with `maglimit` ≤ 12.
 
+**Labels are not unique.** A label is the V magnitude ×10 without the decimal point,
+so a wide chart can carry several stars with the same label (the 180′ SS Cyg chart
+X43358HAP has two 114, two 116, two 118 and four 134). Identify stars by AUID; the
+script keys everything per star and names duplicated labels by AUID in `NOTES`.
+
 ## Comparison stars (AAVSO VSP chart API)
 
 Downloaded at run time: `https://apps.aavso.org/vsp/api/chart/?star=<name>&fov=<arcmin>&maglimit=<mag>&format=xml`

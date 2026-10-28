@@ -25,7 +25,7 @@ Authoritative spec: <https://www.aavso.org/aavso-extended-file-format> — verif
 |-------|-----------|-------|
 | `NAME` | e.g. `T CrB` | Star name as returned by AAVSO VSP (`<star>`); the typed name when manual coordinates are used |
 | `DATE` | computed JD | Mid-exposure JD — see `time-handling.md` |
-| `MAG` | computed | T CrB standardised magnitude |
+| `MAG` | computed | Target's standardised magnitude |
 | `MERR` | computed | 1-sigma magnitude error — see `domain-knowledge.md` for formula |
 | `FILT` | `TG` | Green channel of OSC sensor |
 | `TRANS` | `NO` | No transformation to a standard system |
@@ -37,7 +37,7 @@ Authoritative spec: <https://www.aavso.org/aavso-extended-file-format> — verif
 | `AMASS` | computed | Airmass at mid-exposure — see `domain-knowledge.md` |
 | `GROUP` | `na` | |
 | `CHART` | e.g. `X43358CRK` | Chart ID of the comparison sequence downloaded from AAVSO VSP for this run |
-| `NOTES` | short text | Keep well under ~100 chars |
+| `NOTES` | short text | Band, method, comp list, check, stack, moon. The current spec allows several thousand characters (an old guide said 100); keep it succinct |
 
 ## `MTYPE=STD` vs `DIF`
 
@@ -59,8 +59,8 @@ AAVSO HQ prefers raw instrumental values here so they can derive zero points and
 | `106` | `000-BJS-901` | 10.554 | Comp or check | Good at quiescence |
 | `102` | `000-BBW-779` | 10.167 | **Avoid** | Combined magnitude of blended pair (10.21 + 13.75 mag, 8″ apart) — PSF fitting cannot separate them |
 
-Default pairing at quiescence: comp=`98`, check=`106` (or swap). Near outburst, use brighter comps (`84`, `79`) — see Roadmap in CLAUDE.md.
+Reference values for T CrB only. Since v1.2 the script pre-selects an ensemble automatically (stars within 2 mag of the target's in-image estimate), so brighter comps such as `84` and `79` are picked up as T CrB brightens; see `outburst-strategy.md`.
 
 ## Ensemble photometry
 
-When multiple comp stars are used, set `CNAME=ENSEMBLE`, `CMAG=na`, keep one dedicated check star in `KNAME` (must **not** be part of the ensemble) with `KMAG` standardised as described above, and list comp AUIDs/labels in `NOTES`. Mind the ~100-char `NOTES` limit.
+When multiple comp stars are used, set `CNAME=ENSEMBLE`, `CMAG=na`, keep one dedicated check star in `KNAME` (must **not** be part of the ensemble) with `KMAG` standardised as described above, and list the comps in `NOTES` — by chart label, or by AUID when the label occurs more than once in the chart (wide charts reuse labels).

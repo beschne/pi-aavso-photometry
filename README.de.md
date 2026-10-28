@@ -106,6 +106,8 @@ diesem Bild — eine Katalog-Helligkeit des Ziels ist nicht nötig. Sterne, die 
 Qualitätsprüfungen bestehen und innerhalb von 2 Größenklassen des Ziels liegen, werden
 automatisch für das Ensemble ausgewählt. Auf eine Zeile klicken, um sie ein- oder
 auszuschalten. Den **Prüfstern** aus dem Dropdown am unteren Rand wählen.
+Große Karten vergeben manchmal dasselbe Label an zwei Sterne ähnlicher Helligkeit; sie
+erscheinen als getrennte Zeilen, und der Bericht nennt sie mit ihrer AUID.
 
 Der Download wird wiederverwendet, solange Bild, Objekt, Koordinaten und Grenzhelligkeit
 gleich bleiben — Hin- und Herwechseln zwischen den Schritten wiederholt ihn nicht.

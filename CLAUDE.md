@@ -166,7 +166,7 @@ work. If splitting is ever warranted, the natural seams are:
 | `aavso-photometry.js` | Dialog + `main()` only |
 
 The `lib/` files would be reusable across future `pi-…` scripts. That is the trigger
-worth waiting for: when a second script needs the CSV parser or astrometry helper,
+worth waiting for: when a second script needs the VSP client or astrometry helper,
 split then. Until that point the single-file approach costs nothing and avoids
 multi-file download friction for users.
 
@@ -177,9 +177,9 @@ Full details: `docs/domain-knowledge.md`.
 - **Target position:** from the VSP response at run time — no hardcoded targets. (T CrB: RA = 239.8757°, Dec = +25.9202°, matches VSP.)
 - **Observer site:** read from FITS keywords at run time (see below); **no hardcoded fallback**. `const SITE` has been removed.
 - **TG band:** green OSC channel; calibrated against V-band comp star magnitudes; runs ~0.1–0.3 mag brighter than V for red stars. **Never relabel TG as V.**
-- **TB band:** blue OSC channel; calibrated against B-band comp star magnitudes from the same CSV. B-band is most sensitive to the hot WD/disk component because the M3 III giant contributes minimally at B wavelengths (B−V ≈ +1.6 for M giants). TB is the most diagnostic band for early outburst detection. The colour index TB−TG approximates B−V; a sustained blueward shift is an early warning of increased accretion.
+- **TB band:** blue OSC channel; calibrated against B-band comp star magnitudes from the same VSP sequence. B-band is most sensitive to the hot WD/disk component because the M3 III giant contributes minimally at B wavelengths (B−V ≈ +1.6 for M giants). TB is the most diagnostic band for early outburst detection. The colour index TB−TG approximates B−V; a sustained blueward shift is an early warning of increased accretion.
 - **TR (red channel): intentionally not implemented.** Rc flux at quiescence is overwhelmingly M-giant photospheric emission; the WD/disk contribution is a small fraction, making TR the least sensitive band for detecting accretion changes or nova onset. The Rc→TR colour correction for M stars is also large without transformation coefficients.
-- **Comparison stars:** from the VSP XML `photometry` list; V required, B attached when present. Prefer AUID over label in output; exclude blended stars (comments matching blend/pair/combined, e.g. label 102 near T CrB). The saved `<chartId>.csv` (`AUID,RA,Dec,Label,Band,Mag,Error,Comments`, RFC 4180 quoting) is a record of the run, never read back.
+- **Comparison stars:** from the VSP XML `photometry` list; V required, B attached when present. **Chart labels are not unique** on wide charts (stars of equal magnitude share a label): PSF fits and comp/check selection are keyed per star, never by label, and `NOTES` names a star by AUID when its label occurs more than once in the chart. Prefer AUID over label in output; exclude blended stars (comments matching blend/pair/combined, e.g. label 102 near T CrB). The saved `<chartId>.csv` (`AUID,RA,Dec,Label,Band,Mag,Error,Comments`, RFC 4180 quoting) is a record of the run, never read back.
 - **DATE-OBS caveat:** ImageIntegration writes the midpoint of sub *start* times, ignoring exposure duration — unreliable. The acquisition-time dialog (see `docs/time-handling.md`) is the fix.
 - **Airmass:** Kasten & Young (1989) formula in pure JS — see `docs/domain-knowledge.md`. If lat or lon is absent, `AMASS=na` is written; this is valid per the AAVSO Extended File Format spec and is not treated as an error.
 - **Default comp ensemble:** stars within `ENSEMBLE_MAX_DELTA_MAG` (2.0) of a preliminary TG estimate of the target — `estimateTargetMag()`: median zero-point (magV − instMag) of all good-PSF comps applied to the target. No catalogue magnitude of the target is needed, and the selection follows the target as it brightens. Proximity minimises differential extinction and PSF fitting error contribution. Not persisted between sessions.
@@ -239,11 +239,11 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). T
 | Step | Panel | Contents |
 |------|-------|----------|
 | **0 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); image field size from the plate solution (read-only); **Object** name + **Comp mag limit** (both persisted); **Coordinates** CheckBox + RA/Dec edits (manual fallback); **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
-| **1 — Comp Stars** | `compStarsPanel` | TreeBox (5 cols: ✓, Label, AUID, V mag, Δmag, Quality) listing all in-frame V-band candidates; **Check** ComboBox at bottom; `updateCompCount()` label |
+| **1 — Comp Stars** | `compStarsPanel` | TreeBox (5 cols: Comp ✓, Label, V mag, Δ mag, Notes) listing all in-frame non-blended V-band candidates; **Check** ComboBox at bottom; `updateCompCount()` label |
 | **2 — Photometry** | `runPanel` | TG magnitude + MERR; TB magnitude + MERR (shows — if blue PSF rejected or no B-band comp data available); TG PSF flux row (instrumental mags); `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation, TG only) |
 | **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; Frames (editable, auto-filled, + "Locate…" button to read exact count from a master XISF's processing history) / EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
 | **4 — Verification** | `verifyPanel` | Annotated thumbnail (target = red circle, comp stars = green, check = cyan); No / Auto / Boosted stretch RadioButtons; re-renders on stretch change via `reRenderVerify()` |
-| **5 — Report** | `reportPanel` | Format RadioButtons (Human readable default, AAVSO Extended); scrollable read-only `TextBox` preview; Export button (opens `SaveFileDialog`, writes immediately) |
+| **5 — Report** | `reportPanel` | Format RadioButtons (Human readable default, AAVSO Extended); scrollable read-only `TextBox` preview; **Save comparison stars** / **Download finder chart** CheckBoxes (persisted); Export button (opens `SaveFileDialog`, writes immediately) |
 
 **RadioButton grouping:** three independent exclusive groups, each with a different parent to avoid Qt's per-parent exclusion colliding across groups:
 - Mid-time group (`rbMidpoint`, `rbStart`, `rbManual`) — parented to `midtimePanel`.
@@ -268,7 +268,7 @@ Keep code structured so these are additions, not rewrites. In priority order:
 - ~~**Ensemble photometry.**~~ Done (v1.2.0): six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars TreeBox; single DynamicPSF discovery pass; ZP = mean(magV_i − instMag_i); `CNAME=ENSEMBLE`, `CMAG=na`; comp labels in NOTES. End-to-end tested with T CrB submission to AAVSO.
 
 - ~~**Multiband TB/TG**~~ Done (v1.3.0): blue channel (TB) measured simultaneously with TG via a second DynamicPSF pass; AAVSO report includes one observation line per band. Red channel (TR) is intentionally omitted — M-giant-dominated at quiescence, least diagnostic for outburst detection.
-- ~~**User-specifiable target star.**~~ Done (v2.0.0-dev): object name + automatic VSP comparison sequence; see `docs/plan-generic-target.md`.
+- ~~**User-specifiable target star.**~~ Done (v2.0.0): object name + automatic VSP comparison sequence; see `docs/plan-generic-target.md`.
 
 - **(Low priority — scientific extensions)**
   - **TG→V transformation** (`TRANS=YES`) with once-derived coefficients.
@@ -283,7 +283,7 @@ Keep code structured so these are additions, not rewrites. In priority order:
 
 - Clearly-labelled block of **tunable constants at the very top** of the file.
 - **English** comments throughout.
-- Factor the target-star definition so the script can later cover more than T CrB.
+- No target-specific values in code: the target and its comparison stars come from AAVSO at run time (`TARGET` is filled by `resolveSequence()`).
 - PJSR/PixInsight APIs only — no external libraries.
 
 ## Git
