@@ -73,13 +73,13 @@ development. That mechanism is only for distributing the finished script to othe
 
 | Source (`screenshots/`) | Install as (`images/`) |
 |-------------------------|------------------------|
-| `screenshot, v2.0.0-dev, (1) setup.png` | `setup.png` |
-| `screenshot, v2.0.0-dev, (2) comp stars.png` | `comp-stars.png` |
-| `screenshot, v2.0.0-dev, (3) photometry.png` | `photometry.png` |
-| `screenshot, v2.0.0-dev, (4) mid-time.png` | `mid-time.png` |
-| `screenshot, v2.0.0-dev, (5) verification.png` | `verification.png` |
-| `screenshot, v2.0.0-dev, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v2.0.0-dev, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v2.0.0, (1) setup.png` | `setup.png` |
+| `screenshot, v2.0.0, (2) comp stars.png` | `comp-stars.png` |
+| `screenshot, v2.0.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v2.0.0, (4) mid-time.png` | `mid-time.png` |
+| `screenshot, v2.0.0, (5) verification.png` | `verification.png` |
+| `screenshot, v2.0.0, (6) report human readable.png` | `report-human.png` |
+| `screenshot, v2.0.0, (6) report aavso.png` | `report-aavso.png` |
 
 **pidoc path depth:** the HTML references `../../pidoc/` for CSS/JS (two levels up from `Photometry/` to `doc/`). Do not change this when editing the file.
 
@@ -183,7 +183,7 @@ Full details: `docs/domain-knowledge.md`.
 - **DATE-OBS caveat:** ImageIntegration writes the midpoint of sub *start* times, ignoring exposure duration — unreliable. The acquisition-time dialog (see `docs/time-handling.md`) is the fix.
 - **Airmass:** Kasten & Young (1989) formula in pure JS — see `docs/domain-knowledge.md`. If lat or lon is absent, `AMASS=na` is written; this is valid per the AAVSO Extended File Format spec and is not treated as an error.
 - **Default comp ensemble:** stars within `ENSEMBLE_MAX_DELTA_MAG` (2.0) of a preliminary TG estimate of the target — `estimateTargetMag()`: median zero-point (magV − instMag) of all good-PSF comps applied to the target. No catalogue magnitude of the target is needed, and the selection follows the target as it brightens. Proximity minimises differential extinction and PSF fitting error contribution. Not persisted between sessions.
-- **Settings keys:** `objectName`, `compMagLimit`, `obsCode`, `lastExportDir`, `saveSequenceWithReport` under `BeSchne/Photometry/`.
+- **Settings keys:** `objectName`, `compMagLimit`, `obsCode`, `lastExportDir`, `saveSequenceWithReport`, `saveChartWithReport` under `BeSchne/Photometry/`.
 
 ## AAVSO Extended File Format
 

@@ -1,12 +1,13 @@
 # Plan: generic target, automatic comparison stars
 
 Branch: `generic-target` (from `main` at v1.4.0). `main` stays the T CrB release.
-Status: **steps 1–9 done; `2.0.0-rc.1`.** Tested in PixInsight on a T CrB master
+Status: **steps 1–9 done; `2.0.0`.** Tested in PixInsight on a T CrB master
 (identical result to v1.4.0; manual coordinates, unknown name and unsaved stack
 also pass) and on SS Cyg (second target; found and fixed the duplicate-label
 bug). Security audit done (no open findings). The real report for the rc step
 is the SS Cyg submission of 2026-10-28 (made with 2.0.0-dev, same code as rc.1).
-Next: merge to `main` as `2.0.0`.
+Set to `2.0.0` on the branch before the merge, so the release screenshots show
+the final version. Next: new screenshots, merge to `main`, tag `v2.0.0`.
 Last updated 2026-10-28.
 
 ## Goal
@@ -154,7 +155,9 @@ CSV file picker is removed.
 - README (EN + DE): replace "Get the comparison-star CSV", troubleshooting rows
   about CSVs, outburst instructions that call `fetch-vsp.py`, file list.
 - `docs/Photometry.html` and screenshots — all seven steps re-captured as
-  `screenshot, v2.0.0-dev, …` (2026-10-28); READMEs and CLAUDE.md point to them. Also new in
+  `screenshot, v2.0.0-dev, …` (2026-10-28), then again as `screenshot, v2.0.0, …`
+  on SS Cyg (after the finder-chart checkbox change); READMEs and CLAUDE.md point
+  to the v2.0.0 set. Also new in
   `docs/pjsr-api-notes.md`: NetworkTransfer, XMLDocument, and the regex-`//`
   preprocessor pitfall.
 - `CLAUDE.md`: architecture items 4–5, comparison-CSV bullet, default comp/check
@@ -169,10 +172,11 @@ CSV file picker is removed.
   2. When the PixInsight test sequence (step 9) passes: `2.0.0-rc.1`; submit
      one real T CrB report and compare with a v1.4.0 run on the same master.
      Increment `rc.N` for fixes.
-  3. After merging to `main`: `VERSION = "2.0.0"`, tag `v2.0.0`, GitHub Release
+  3. `VERSION = "2.0.0"` (done on the branch before merging, for the
+     screenshots), merge to `main`, tag `v2.0.0`, GitHub Release
      (see `PRIVATE_NOTES.md`).
   - At each step, also update the help-page footer in `docs/Photometry.html`
-    (currently `2.0.0-rc.1`).
+    (currently `2.0.0`).
   - `main` stays at 1.4.0; urgent T CrB fixes ship from `main` as 1.4.x.
 - Repeat the security audit (`SECURITY_AUDIT.md`) — new network input and new
   file writes.

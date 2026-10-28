@@ -28,8 +28,8 @@ FITS keywords, and DynamicPSF — rather than reimplementing them externally.
 
 The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-time → Verification → Report.
 
-![Setup step](screenshots/screenshot%2C%20v2.0.0-dev%2C%20%281%29%20setup.png)
-![Comp Stars step](screenshots/screenshot%2C%20v2.0.0-dev%2C%20%282%29%20comp%20stars.png)
+![Setup step](screenshots/screenshot%2C%20v2.0.0%2C%20%281%29%20setup.png)
+![Comp Stars step](screenshots/screenshot%2C%20v2.0.0%2C%20%282%29%20comp%20stars.png)
 
 ---
 
@@ -132,7 +132,7 @@ Inspect the annotated thumbnail: target (red circle), comp stars (green), check 
 Confirm the circles land on the intended stars. Use the stretch buttons to bring out
 faint stars if needed.
 
-![Verification step](screenshots/screenshot%2C%20v2.0.0-dev%2C%20%285%29%20verification.png)
+![Verification step](screenshots/screenshot%2C%20v2.0.0%2C%20%285%29%20verification.png)
 
 **Step 6 — Report**
 
@@ -295,13 +295,13 @@ To install it:
 
 | Source file (`screenshots/`) | Install as (`images/`) |
 |------------------------------|------------------------|
-| `screenshot, v2.0.0-dev, (1) setup.png` | `setup.png` |
-| `screenshot, v2.0.0-dev, (2) comp stars.png` | `comp-stars.png` |
-| `screenshot, v2.0.0-dev, (3) photometry.png` | `photometry.png` |
-| `screenshot, v2.0.0-dev, (4) mid-time.png` | `mid-time.png` |
-| `screenshot, v2.0.0-dev, (5) verification.png` | `verification.png` |
-| `screenshot, v2.0.0-dev, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v2.0.0-dev, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v2.0.0, (1) setup.png` | `setup.png` |
+| `screenshot, v2.0.0, (2) comp stars.png` | `comp-stars.png` |
+| `screenshot, v2.0.0, (3) photometry.png` | `photometry.png` |
+| `screenshot, v2.0.0, (4) mid-time.png` | `mid-time.png` |
+| `screenshot, v2.0.0, (5) verification.png` | `verification.png` |
+| `screenshot, v2.0.0, (6) report human readable.png` | `report-human.png` |
+| `screenshot, v2.0.0, (6) report aavso.png` | `report-aavso.png` |
 
 ---
 
