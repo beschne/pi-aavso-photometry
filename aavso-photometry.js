@@ -73,6 +73,9 @@ const VSP_TIMEOUT_S      = 60;    // total time limit for a sequence request
 // The finder-chart PNG is optional; its endpoint returned HTTP 500 after
 // ~90 s when tested (2026-10-28), so give up early rather than block the UI.
 const VSP_PNG_TIMEOUT_S  = 20;
+// Response size caps (typical: XML 0.4–45 KB, PNG < 2 MB).
+const VSP_MAX_XML_BYTES  = 5 * 1048576;
+const VSP_MAX_PNG_BYTES  = 20 * 1048576;
 const VSP_USER_AGENT     = "AAVSO-Photometry-PixInsight (github.com/beschne/pi-aavso-photometry)";
 
 // --- Photometry thresholds ---------------------------------------
@@ -126,19 +129,24 @@ const SETTINGS_SAVE_SEQ    = SETTINGS_NS + "/saveSequenceWithReport";
 // ============================================================
 
 // HTTP GET via NetworkTransfer, aborted after maxSeconds in total
-// (setConnectionTimeout only limits the connection phase). Never throws for
-// HTTP errors — the caller inspects the result:
-// { ok, code, type, data, error, timedOut }.
-function httpGet( url, maxSeconds ) {
+// (setConnectionTimeout only limits the connection phase) or when the
+// response exceeds maxBytes. Never throws for HTTP errors — the caller
+// inspects the result: { ok, code, type, data, error, timedOut }.
+function httpGet( url, maxSeconds, maxBytes ) {
    var data = new ByteArray;
    var t0   = Date.now();
    var timedOut = false;
+   var tooLarge = false;
    var T = new NetworkTransfer;
    T.setURL( url );
    T.setSSL();
    T.setConnectionTimeout( Math.min( 30, maxSeconds ) );
    T.setCustomHTTPHeaders( [ "User-Agent: " + VSP_USER_AGENT ] );
    T.onDownloadDataAvailable = function( chunk ) {
+      if ( data.length + chunk.length > maxBytes ) {
+         tooLarge = true;
+         return false;  // abort
+      }
       data.add( chunk );
       return true;
    };
@@ -156,8 +164,10 @@ function httpGet( url, maxSeconds ) {
       code    : T.responseCode,
       type    : T.contentType,
       data    : data,
-      error   : timedOut ? "no complete response within " + maxSeconds + " s" : T.errorInformation,
-      timedOut: timedOut,
+      error   : timedOut ? "no complete response within " + maxSeconds + " s"
+              : tooLarge ? "response larger than " + Math.round( maxBytes / 1048576 ) + " MB"
+              : T.errorInformation,
+      timedOut: timedOut || tooLarge,  // either way the data is incomplete
    };
 }
 
@@ -175,6 +185,13 @@ function buildVspUrl( q ) {
    params.push( "maglimit=" + q.maglimit.toFixed( 1 ) );
    params.push( "format=xml" );
    return VSP_CHART_API + "?" + params.join( "&" );
+}
+
+// Removes console/rich-text markup characters from an identifier-like string
+// (AUID, chart label, star name). These never contain < > & legitimately;
+// stripping them at the source keeps every later console line and label safe.
+function plainText( s ) {
+   return String( s ).replace( /[<>&]/g, "" );
 }
 
 // First child element with the given name, or null.
@@ -217,7 +234,7 @@ function parseVspXml( root ) {
    var seq = {
       chartId : chartId,
       imageUri: xmlChildText( root, "image_uri" ),
-      starName: xmlChildText( root, "star" ),
+      starName: plainText( xmlChildText( root, "star" ) ),
       fov     : parseFloat( xmlChildText( root, "fov" ) ),
       maglimit: parseFloat( xmlChildText( root, "maglimit" ) ),
       target  : null,
@@ -229,7 +246,7 @@ function parseVspXml( root ) {
    var tRa  = xmlChildText( root, "ra" );
    var tDec = xmlChildText( root, "dec" );
    if ( tRa && tDec ) {
-      var t = { auid: xmlChildText( root, "auid" ),
+      var t = { auid: plainText( xmlChildText( root, "auid" ) ),
                 ra  : sexagesimalToDeg( tRa ) * 15,
                 dec : sexagesimalToDeg( tDec.replace( /^\+/, "" ) ) };
       if ( isFinite( t.ra ) && isFinite( t.dec ) )
@@ -239,10 +256,10 @@ function parseVspXml( root ) {
    var phot  = xmlChild( root, "photometry" );
    var items = phot ? phot.childElementsByName( "list-item" ) : [];
    items.forEach( function( item ) {
-      var auid    = xmlChildText( item, "auid" );
+      var auid    = plainText( xmlChildText( item, "auid" ) );
       var raStr   = xmlChildText( item, "ra" );
       var decStr  = xmlChildText( item, "dec" ).replace( /^\+/, "" );
-      var label   = xmlChildText( item, "label" );
+      var label   = plainText( xmlChildText( item, "label" ) );
       var bandsEl = xmlChild( item, "bands" );
 
       var mags = {};
@@ -283,7 +300,7 @@ function parseVspXml( root ) {
 function fetchVspSequence( q ) {
    var url = buildVspUrl( q );
    console.writeln( "VSP request: <raw>" + url + "</raw>" );  // <raw>: keep '&' visible
-   var r = httpGet( url, VSP_TIMEOUT_S );
+   var r = httpGet( url, VSP_TIMEOUT_S, VSP_MAX_XML_BYTES );
    var text = r.timedOut ? "" : r.data.utf8ToString();
    if ( text.length === 0 )
       throw new Error( "AAVSO VSP request failed" +
@@ -362,8 +379,8 @@ function fetchChartImage( uri ) {
    // String prefix checks, not regex literals: the PJSR preprocessor treats
    // two consecutive slashes inside a regex literal as a line comment.
    if ( uri.indexOf( VSP_HOST ) !== 0 )
-      return { error: "unexpected chart image URL \"" + uri + "\"" };
-   var r = httpGet( uri, VSP_PNG_TIMEOUT_S );
+      return { error: "unexpected chart image URL \"" + escHtml( uri ) + "\"" };
+   var r = httpGet( uri, VSP_PNG_TIMEOUT_S, VSP_MAX_PNG_BYTES );
    if ( !r.ok || r.code !== 200 || String( r.type ).indexOf( "image" + "/" ) !== 0 )
       return { error: "download failed" + ( r.code ? " (HTTP " + r.code + ")" : "" ) +
                       ( r.error ? ": " + r.error : "" ) };
@@ -1052,6 +1069,7 @@ class PhotometryDialog extends Dialog {
       var _currentStep   = 0;
       var _seq           = null;    // VSP comparison sequence (fetchVspSequence result)
       var _seqKey        = "";      // request that produced _seq — reused while inputs are unchanged
+      var _busy          = false;   // true while discovery (downloads + PSF fits) runs
       var _tcrb_mag      = NaN;
       var _merr          = NaN;
       var _instMag_T     = null;
@@ -1109,16 +1127,24 @@ class PhotometryDialog extends Dialog {
       }
 
       function activateStep( idx ) {
+         // Discovery keeps the UI responsive (processEvents during downloads);
+         // ignore step changes until it has finished.
+         if ( _busy ) return;
          if ( !isStepEnabled( idx ) ) return;
          _currentStep = idx;
          var panels = [ setupPanel, compStarsPanel, runPanel, midtimePanel, verifyPanel, reportPanel ];
          panels.forEach( function( p, i ) { p.visible = ( i === idx ); } );
          updateStepNav();
          if ( idx === 1 ) {
+            _busy = true;
             try { runDiscovery(); }
             catch ( e ) {
                new MessageBox( (e && e.message) ? e.message : String(e),
                                TITLE, StdIcon.Warning, StdButton.Ok ).execute();
+            }
+            finally {
+               _busy = false;
+               updateStepNav();
             }
          }
          if ( idx === 2 ) {
@@ -2279,8 +2305,19 @@ class PhotometryDialog extends Dialog {
 
       this.nextBtn = new PushButton( this );
       this.nextBtn.onClick = function() {
+         if ( _busy ) return;
          if ( _currentStep === 5 ) self.cancel();
          else activateStep( _currentStep + 1 );
+      };
+
+      // Closing the window while discovery runs would tear down the dialog
+      // under a running download or PSF fit. Returning false keeps it open.
+      this.onClose = function() {
+         if ( _busy ) {
+            console.warningln( "Please wait until the comparison stars have been downloaded and measured." );
+            return false;
+         }
+         return true;
       };
 
       var nextRow = new HorizontalSizer;
@@ -2412,7 +2449,7 @@ class PhotometryDialog extends Dialog {
             throw new Error( "AAVSO VSP chart " + seq.chartId + " has no comparison stars with a " +
                              "V magnitude (mag limit " + format( "%.1f", maglimit ) + ")." );
 
-         TARGET.name = manual ? name : ( seq.starName || name );
+         TARGET.name = plainText( manual ? name : ( seq.starName || name ) );
          TARGET.ra   = ( !manual && seq.target ) ? seq.target.ra  : ra;
          TARGET.dec  = ( !manual && seq.target ) ? seq.target.dec : dec;
 
@@ -2440,7 +2477,7 @@ class PhotometryDialog extends Dialog {
          var r = fetchChartImage( seq.imageUri );
          if ( r.error )
             console.warningln( "Finder chart not available (" + r.error + "). It can be viewed at " +
-                               seq.imageUri );
+                               escHtml( seq.imageUri ) );
          else
             seq.pngData = r.data;
       }
@@ -2466,7 +2503,7 @@ class PhotometryDialog extends Dialog {
          }
          if ( !seq.pngData && !File.exists( base + ".png" ) )
             console.warningln( "Finder chart " + seq.chartId + ".png not saved — it could not be " +
-                               "downloaded. It can be viewed at " + seq.imageUri );
+                               "downloaded. It can be viewed at " + escHtml( seq.imageUri ) );
          return written;
       }
 
@@ -2520,7 +2557,7 @@ class PhotometryDialog extends Dialog {
          var allStars   = _seq.stars;
          var nonBlended = allStars.filter( function(s) { return !s.blended; } );
          allStars.filter( function(s) { return s.blended; } ).forEach( function(s) {
-            console.warningln( "Excluded (blended): " + s.label + " (" + s.auid + ") — " + s.comments );
+            console.warningln( "Excluded (blended): " + s.label + " (" + s.auid + ") — " + escHtml( s.comments ) );
          });
 
          var inFrame = [];
@@ -2851,8 +2888,9 @@ class PhotometryDialog extends Dialog {
          }
 
          // Console summary
-         console.writeln( format( "  %ls = %.3f TG   MERR = %.3f   ZP = %.4f",
-                                  TARGET.name, _tcrb_mag, _merr, _ensembleZP ) );
+         // Name by concatenation, not %ls: format() garbles non-ASCII text
+         console.writeln( "  " + TARGET.name + format( " = %.3f TG   MERR = %.3f   ZP = %.4f",
+                                                        _tcrb_mag, _merr, _ensembleZP ) );
          console.writeln( "  inst T = " + format( "%.4f", _instMag_T ) +
                           "  sigT=" + ( sigT !== null ? format("%.4f",sigT) : "n/a" ) );
          _ensembleEntries.forEach( function(e, i) {
@@ -2903,8 +2941,8 @@ class PhotometryDialog extends Dialog {
                        ? Math.sqrt( sigT_B * sigT_B + sigZP_B * sigZP_B ) : 0.999;
                if ( _merr_B === 0.999 )
                   console.warningln( "TB MERR: PSF noise estimation failed — set to 0.999" );
-               console.writeln( format( "  %ls = %.3f TB   MERR = %.3f   ZP_B = %.4f",
-                                        TARGET.name, _tcrb_mag_B, _merr_B, _ensembleZP_B ) );
+               console.writeln( "  " + TARGET.name + format( " = %.3f TB   MERR = %.3f   ZP_B = %.4f",
+                                                              _tcrb_mag_B, _merr_B, _ensembleZP_B ) );
                console.writeln( "  TB inst T = " + format( "%.4f", _instMag_T_B ) );
                _ensembleEntries.forEach( function(e, i) {
                   if ( _instMag_Cs_B[i] !== null )
