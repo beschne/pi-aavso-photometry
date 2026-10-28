@@ -208,7 +208,7 @@
 <img src="images/comp-stars.png" alt="Comp Stars step"/>
 </div>
 
-<p>Entering this step downloads the comparison stars and measures them. The status line shows each stage: (1) looking up the object at AAVSO, (2) downloading the comparison stars for a chart that covers the whole image around the target, (3) downloading the finder-chart image (optional; gives up after 20&nbsp;s), (4) fitting PSFs of the target and all in-frame candidates. The download is reused while the image, object, coordinates and mag limit are unchanged.</p>
+<p>Entering this step downloads the comparison stars and measures them. The status line shows each stage: (1) looking up the object at AAVSO, (2) downloading the comparison stars for a chart that covers the whole image around the target, (3) fitting PSFs of the target and all in-frame candidates. The download is reused while the image, object, coordinates and mag limit are unchanged.</p>
 
 <p>The candidates are presented in a table. Stars that pass quality checks and are within 2&nbsp;magnitudes of the target are pre-selected as the ensemble; the target&rsquo;s magnitude for this comparison is a preliminary estimate from this image (median zero-point of all good comparison stars), so no catalogue magnitude of the target is needed. Stars flagged as blended in the AAVSO comments are excluded. The discovery pass is shared with the photometry step; no second PSF fit is performed.</p>
 
@@ -350,8 +350,10 @@
 <dt><p>Export&hellip;</p></dt>
 <dd><p>Opens a save-file dialog. Save with a <span class="pidoc_code">.txt</span> extension. The file is written immediately; the dialog preview is a live view of what will be saved.</p></dd>
 
-<dt><p>Also save comparison stars and finder chart</p></dt>
-<dd><p>When ticked (default; remembered), Export also writes <span class="pidoc_code">&lt;chart ID&gt;.csv</span> &mdash; the comparison stars used, one row per star and band &mdash; and <span class="pidoc_code">&lt;chart ID&gt;.png</span> (the finder chart, if it could be downloaded) into the report&rsquo;s folder. Existing files are kept, so several reports share one copy. AAVSO revises sequences over time; this preserves exactly what the report&rsquo;s CHART field refers to.</p></dd>
+<dt><p>Save comparison stars</p></dt>
+<dd><p>When ticked (default; remembered), Export also writes <span class="pidoc_code">&lt;chart ID&gt;.csv</span> &mdash; the comparison stars used, one row per star and band &mdash; into the report&rsquo;s folder. An existing file is kept, so several reports share one copy. AAVSO revises sequences over time; this preserves exactly what the report&rsquo;s CHART field refers to.</p></dd>
+<dt><p>Download finder chart</p></dt>
+<dd><p>When ticked (default off; remembered), Export also downloads the AAVSO finder chart as <span class="pidoc_code">&lt;chart ID&gt;.png</span> into the report&rsquo;s folder (gives up after 20&nbsp;s; an existing file is kept). When unticked, the console prints the chart&rsquo;s URL. The chart is not needed for the photometry; the verification image already marks the comparison and check stars in your own frame.</p></dd>
 </dl>
 
    </div>
@@ -484,7 +486,7 @@
 <dd><p>VSP allows charts wider than 180&prime; only with a magnitude limit of 12 or brighter. With the default limit of 14.5, a wide field (e.g. the Seestar&rsquo;s 4.3&deg;&nbsp;&times;&nbsp;2.4&deg;) gets a 180&prime; chart and comparison stars near the image corners are missing.</p></dd>
 
 <dt><p>Internet connection required</p></dt>
-<dd><p>The comparison stars are downloaded at run time; there is no offline mode. The finder-chart image is optional: if the VSP image server does not answer within 20&nbsp;s, the console prints the chart&rsquo;s URL instead.</p></dd>
+<dd><p>The comparison stars are downloaded at run time; there is no offline mode. The finder-chart image is optional and off by default (in October 2026 the VSP image server returned HTTP 500 for every chart).</p></dd>
 </dl>
 
    </div>

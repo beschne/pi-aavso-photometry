@@ -98,8 +98,7 @@ Statuszeile zeigt jede Stufe:
 1. Objekt bei AAVSO nachschlagen — liefert die Koordinaten des Ziels
 2. Vergleichssterne herunterladen — die Karte wird aus dem Plate-Solve so bemessen,
    dass sie das ganze Bild um das Ziel abdeckt
-3. Aufsuchkarte als Bild herunterladen (Abbruch nach 20 s; optional)
-4. PSF-Fits von Ziel und allen Vergleichssternen im Bild
+3. PSF-Fits von Ziel und allen Vergleichssternen im Bild
 
 Die Kandidaten erscheinen in einer Tabelle mit V-Helligkeit, Δmag zum Ziel und
 PSF-Qualität. Δmag bezieht sich auf eine vorläufige Helligkeitsschätzung des Ziels in
@@ -142,12 +141,16 @@ Der Bericht wird automatisch beim Öffnen dieses Schritts erzeugt.
 Für die AAVSO-Einreichung **AAVSO Extended Format** wählen, dann **Exportieren …** klicken
 und mit Endung `.txt` speichern.
 
-Mit angekreuztem **Also save comparison stars and finder chart** (Standard, wird
-gespeichert) schreibt der Export zusätzlich `<Karten-ID>.csv` — die verwendeten
-Vergleichssterne — und `<Karten-ID>.png` (die Aufsuchkarte, falls sie geladen werden
-konnte) in den Ordner des Berichts. Bereits vorhandene Dateien bleiben erhalten. AAVSO
-überarbeitet Sequenzen mit der Zeit; so bleibt genau dokumentiert, worauf sich das
-Feld `CHART` des Berichts bezieht.
+Zwei Kästchen neben Export (beide werden gespeichert) legen zusätzliche Dateien im
+Ordner des Berichts ab; bereits vorhandene Dateien bleiben erhalten:
+
+- **Save comparison stars** (Standard: an) schreibt `<Karten-ID>.csv` — die verwendeten
+  Vergleichssterne. AAVSO überarbeitet Sequenzen mit der Zeit; so bleibt genau
+  dokumentiert, worauf sich das Feld `CHART` des Berichts bezieht.
+- **Download finder chart** (Standard: aus) lädt das AAVSO-Kartenbild als
+  `<Karten-ID>.png` (Abbruch nach 20 s). Ist es aus, gibt die Konsole die URL der Karte
+  aus. Für die Photometrie wird die Karte nicht gebraucht; das Verifikationsbild markiert
+  Vergleichs- und Prüfsterne bereits im eigenen Bild.
 
 ### 5. Bericht bei AAVSO einreichen
 
@@ -240,8 +243,8 @@ in den Bildecken fehlen — bei einem weiten Feld wie dem 4,3° × 2,4° des See
 Grenze auf 12 setzen, um das ganze Bild abzudecken.
 
 **Internetverbindung erforderlich.** Die Vergleichssterne werden zur Laufzeit geladen;
-einen Offline-Modus gibt es nicht. Das Bild der Aufsuchkarte ist optional: Antwortet der
-VSP-Bildserver nicht innerhalb von 20 s, gibt die Konsole stattdessen die URL der Karte aus.
+einen Offline-Modus gibt es nicht. Das Bild der Aufsuchkarte ist optional und standardmäßig
+aus (im Oktober 2026 lieferte der VSP-Bildserver für jede Karte HTTP 500).
 
 **DATE-OBS bei gestackten Mastern unzuverlässig.** PixInsights `ImageIntegration`
 schreibt `DATE-OBS` als Mittelpunkt der Sub-Startzeiten ohne Belichtungsdauer.

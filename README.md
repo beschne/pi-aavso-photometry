@@ -98,8 +98,7 @@ shows each stage:
 1. Looking up the object at AAVSO — gets the target's coordinates
 2. Downloading the comparison stars — the chart is sized from the plate solution to
    cover the whole image around the target
-3. Downloading the finder chart image (gives up after 20 s; it is optional)
-4. Fitting PSFs of the target and all in-frame comparison stars
+3. Fitting PSFs of the target and all in-frame comparison stars
 
 The candidates appear in a table with V mag, Δmag from the target, and PSF quality
 notes. Δmag is measured from a preliminary estimate of the target's brightness in
@@ -141,11 +140,16 @@ A human-readable report is generated automatically when you enter this step.
 Switch to **AAVSO Extended Format** for submission, then click **Export…** and save
 with a `.txt` extension.
 
-With **Also save comparison stars and finder chart** ticked (default, remembered),
-Export also writes `<chart ID>.csv` — the comparison stars used — and `<chart ID>.png`
-(the finder chart, if it could be downloaded) into the report's folder. Files that
-already exist there are kept. AAVSO revises sequences over time, so this preserves
-exactly what the report's `CHART` field refers to.
+Two checkboxes next to Export (both remembered) add files to the report's folder;
+files that already exist there are kept:
+
+- **Save comparison stars** (default on) writes `<chart ID>.csv` — the comparison
+  stars used. AAVSO revises sequences over time, so this preserves exactly what the
+  report's `CHART` field refers to.
+- **Download finder chart** (default off) downloads the AAVSO chart image as
+  `<chart ID>.png` (gives up after 20 s). When off, the console prints the chart's URL.
+  The chart is not needed for the photometry; the verification image already marks the
+  comparison and check stars in your own frame.
 
 ### 5. Submit to AAVSO
 
@@ -238,8 +242,8 @@ missing — for a wide field such as the Seestar's 4.3° × 2.4°, set the limit
 cover the whole frame.
 
 **Internet connection required.** The comparison stars are downloaded at run time;
-there is no offline mode. The finder chart image is optional: if the VSP image
-server does not answer within 20 s, the console prints the chart's URL instead.
+there is no offline mode. The finder chart image is optional and off by default (in
+October 2026 the VSP image server returned HTTP 500 for every chart).
 
 **DATE-OBS unreliable for stacked masters.** PixInsight's `ImageIntegration` writes
 `DATE-OBS` as the midpoint of sub *start* times, ignoring exposure duration. Always

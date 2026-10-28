@@ -11,8 +11,8 @@
                (TG green + TB blue channels), derives the target magnitude from \
                an ensemble of comp stars (or a single comp), checks quality \
                against a check star, and writes an AAVSO Extended File Format \
-               report; the comparison stars and finder chart can be saved \
-               alongside it. Observer site coordinates are read automatically \
+               report; the comparison stars (and optionally the finder \
+               chart) can be saved alongside it. Observer site coordinates are read automatically \
                from FITS keywords. See the project README on GitHub for a full \
                getting-started guide.
 
@@ -123,6 +123,7 @@ const SETTINGS_MAGLIMIT    = SETTINGS_NS + "/compMagLimit";
 const SETTINGS_LAST_DIR    = SETTINGS_NS + "/lastExportDir";
 const SETTINGS_OBSCODE     = SETTINGS_NS + "/obsCode";
 const SETTINGS_SAVE_SEQ    = SETTINGS_NS + "/saveSequenceWithReport";
+const SETTINGS_SAVE_CHART  = SETTINGS_NS + "/saveChartWithReport";
 
 // ============================================================
 // AAVSO VSP comparison sequence
@@ -456,8 +457,9 @@ function projectStars( metadata, stars, width, height ) {
 
 // Fits a Gaussian PSF to each position in starsIn on the given channel.
 // channel: 0=red, 1=green (default, TG), 2=blue (TB) — PixInsight R/G/B ordering.
-// starsIn: array of { label, x, y }
-// Returns an object keyed by label → { B, A, cx, cy, sx, sy, theta, mad }
+// starsIn: array of { key, x, y } — key must be unique (chart labels are not:
+//   wide VSP charts reuse the same label for stars of equal magnitude)
+// Returns an object keyed by key → { B, A, cx, cy, sx, sy, theta, mad }
 //   or null if the fit did not converge for that star.
 function fitPSF( window, starsIn, channel ) {
    if ( channel === undefined ) channel = 1;  // default: green
@@ -516,7 +518,7 @@ function fitPSF( window, starsIn, channel ) {
 
    var results = {};
    for ( var i = 0; i < starsIn.length; i++ )
-      results[ starsIn[i].label ] = byStarIdx[i] || null;
+      results[ starsIn[i].key ] = byStarIdx[i] || null;
    return results;
 }
 
@@ -1069,7 +1071,7 @@ class PhotometryDialog extends Dialog {
       var _currentStep   = 0;
       var _seq           = null;    // VSP comparison sequence (fetchVspSequence result)
       var _seqKey        = "";      // request that produced _seq — reused while inputs are unchanged
-      var _busy          = false;   // true while discovery (downloads + PSF fits) runs
+      var _busy          = false;   // true while discovery or a chart download at export runs
       var _tcrb_mag      = NaN;
       var _merr          = NaN;
       var _instMag_T     = null;
@@ -1517,18 +1519,16 @@ class PhotometryDialog extends Dialog {
       }
 
       function updateCheckCombo() {
-         var selectedLabels = {};
-         _ensembleEntries.forEach( function(e) { selectedLabels[ e.star.label ] = true; } );
          _checkEligible = _allInFrame.filter( function(e) {
-            return !selectedLabels[ e.star.label ] && e.instMag !== null;
+            return _ensembleEntries.indexOf( e ) < 0 && e.instMag !== null;
          });
-         var prevLabel = _checkStar ? _checkStar.label : null;
+         var prevAuid = _checkStar ? _checkStar.auid : null;
          while ( self.checkCombo.numberOfItems > 0 ) self.checkCombo.removeItem( 0 );
          _checkEligible.forEach( function(e) {
             self.checkCombo.addItem( e.star.label + "  (" + format( "%.3f", e.star.magV ) + " V)" );
          });
-         var keepIdx = prevLabel
-            ? _checkEligible.findIndex( function(e) { return e.star.label === prevLabel; } ) : -1;
+         var keepIdx = prevAuid
+            ? _checkEligible.findIndex( function(e) { return e.star.auid === prevAuid; } ) : -1;
          var selIdx = keepIdx >= 0 ? keepIdx : 0;
          self.checkCombo.currentItem = selIdx;
          _checkStar = ( _checkEligible.length > 0 ) ? _checkEligible[ selIdx ].star : null;
@@ -2128,6 +2128,7 @@ class PhotometryDialog extends Dialog {
       this.outBrowseBtn.text    = "Export...";
       this.outBrowseBtn.toolTip = "Choose a file and write the report";
       this.outBrowseBtn.onClick = function() {
+         if ( _busy ) return;
          if ( _reportText === "" ) {
             new MessageBox( "Create a report first.", TITLE, StdIcon.Warning, StdButton.Ok ).execute();
             return;
@@ -2176,26 +2177,52 @@ class PhotometryDialog extends Dialog {
                else
                   console.writeln( "Comparison sequence " + _seq.chartId + " already saved in this folder." );
             }
+            if ( _seq ) {
+               if ( self.saveChartCheck.checked ) {
+                  _busy = true;
+                  try {
+                     saveChartImage( _seq, outDir );
+                  } finally {
+                     _busy = false;
+                  }
+               } else
+                  console.writeln( "Finder chart " + _seq.chartId + ": " + escHtml( _seq.imageUri ) );
+            }
             console.writeln( SEP );
          }
       };
 
       this.saveSeqCheck = new CheckBox( reportPanel );
-      this.saveSeqCheck.text = "Also save comparison stars and finder chart";
+      this.saveSeqCheck.text = "Save comparison stars";
       var storedSaveSeq = Settings.read( SETTINGS_SAVE_SEQ, DataType_Boolean );
       this.saveSeqCheck.checked = Settings.lastReadOK ? storedSaveSeq : true;
       this.saveSeqCheck.toolTip = "On export, also write <chart ID>.csv (the AAVSO comparison stars used) " +
-                                  "and <chart ID>.png (finder chart, if it could be downloaded) into the " +
-                                  "report's folder. Existing files are kept. AAVSO revises sequences over " +
-                                  "time, so this preserves exactly what the report's CHART refers to.";
+                                  "into the report's folder. An existing file is kept. AAVSO revises " +
+                                  "sequences over time, so this preserves exactly what the report's CHART " +
+                                  "refers to.";
       this.saveSeqCheck.onCheck = function( checked ) {
          Settings.write( SETTINGS_SAVE_SEQ, DataType_Boolean, checked );
+      };
+
+      // Off by default: the VSP image endpoint has been failing (HTTP 500
+      // after ~90 s), and the chart is not needed for the photometry.
+      this.saveChartCheck = new CheckBox( reportPanel );
+      this.saveChartCheck.text = "Download finder chart";
+      var storedSaveChart = Settings.read( SETTINGS_SAVE_CHART, DataType_Boolean );
+      this.saveChartCheck.checked = Settings.lastReadOK ? storedSaveChart : false;
+      this.saveChartCheck.toolTip = "On export, also download the AAVSO finder chart as <chart ID>.png " +
+                                    "into the report's folder (gives up after " + VSP_PNG_TIMEOUT_S +
+                                    " s). An existing file is kept. When off, the chart's URL is " +
+                                    "printed to the console.";
+      this.saveChartCheck.onCheck = function( checked ) {
+         Settings.write( SETTINGS_SAVE_CHART, DataType_Boolean, checked );
       };
 
       var outRow = new HorizontalSizer;
       outRow.spacing = 16;
       outRow.addStretch();
       outRow.add( this.saveSeqCheck );
+      outRow.add( this.saveChartCheck );
       outRow.add( this.outBrowseBtn );
       outRow.addStretch();
 
@@ -2393,17 +2420,17 @@ class PhotometryDialog extends Dialog {
          var key = [ _window.mainView.id, image.width, image.height,
                      name, maglimit, manual, ra, dec ].join( "|" );
          if ( _seq && key === _seqKey ) {
-            setStatus( "Steps 1–3/4: Reusing AAVSO chart " + _seq.chartId + " (inputs unchanged)." );
+            setStatus( "Steps 1–2/3: Reusing AAVSO chart " + _seq.chartId + " (inputs unchanged)." );
             return _seq;
          }
 
          if ( manual )
-            setStatus( "Step 1/4: Using manual coordinates for \"" + name + "\"." );
+            setStatus( "Step 1/3: Using manual coordinates for \"" + name + "\"." );
          else {
             // Small first request — only to get the target's coordinates
             var probe;
             try {
-               setStatus( "Step 1/4: Looking up \"" + name + "\" at AAVSO (VSX)…" );
+               setStatus( "Step 1/3: Looking up \"" + name + "\" at AAVSO (VSX)…" );
                probe = fetchVspSequence( { star: name, fov: VSP_PROBE_FOV, maglimit: VSP_PROBE_MAGLIMIT } );
             } catch ( e ) {
                if ( e.vspRejected ) {
@@ -2440,7 +2467,7 @@ class PhotometryDialog extends Dialog {
                                   "′) — comparison stars near the image corners may be missing." );
          }
 
-         setStatus( "Step 2/4: Downloading comparison stars from AAVSO VSP (" + fovReq.fov +
+         setStatus( "Step 2/3: Downloading comparison stars from AAVSO VSP (" + fovReq.fov +
                     "′ chart, mag limit " + format( "%.1f", maglimit ) + ")…" );
          var seq = fetchVspSequence( manual
             ? { ra: ra,     dec: dec, fov: fovReq.fov, maglimit: maglimit }
@@ -2453,58 +2480,54 @@ class PhotometryDialog extends Dialog {
          TARGET.ra   = ( !manual && seq.target ) ? seq.target.ra  : ra;
          TARGET.dec  = ( !manual && seq.target ) ? seq.target.dec : dec;
 
-         loadChartImage( seq );
          _seqKey = key;
          return seq;
       }
 
-      // Gets the finder chart PNG into memory (seq.pngData) for saving at
-      // export. Same request → same chart ID, so a PNG saved by an earlier
-      // export to the last export folder is reused instead of downloaded —
-      // the download is slow (or failing) and the chart does not change.
-      // Failure is a warning: it never stops the photometry.
-      function loadChartImage( seq ) {
-         seq.pngData = null;
-         var lastDir = Settings.read( SETTINGS_LAST_DIR, DataType_String );
-         var prev    = lastDir ? lastDir + "/" + seq.chartId + ".png" : "";
-         if ( prev && File.exists( prev ) ) {
-            seq.pngData = File.readFile( prev );
-            setStatus( "Step 3/4: Finder chart " + seq.chartId + ".png already saved — reusing it." );
-            return;
-         }
-         setStatus( "Step 3/4: Downloading finder chart " + seq.chartId + ".png (gives up after " +
-                    VSP_PNG_TIMEOUT_S + " s)…" );
-         var r = fetchChartImage( seq.imageUri );
-         if ( r.error )
-            console.warningln( "Finder chart not available (" + r.error + "). It can be viewed at " +
-                               escHtml( seq.imageUri ) );
-         else
-            seq.pngData = r.data;
-      }
-
-      // Writes <chartId>.csv and, if available, <chartId>.png into `dir`
-      // (the export folder). Existing files are kept — several reports from
-      // one night share one copy. Returns the list of files written.
+      // Writes <chartId>.csv into `dir` (the export folder). An existing
+      // file is kept — several reports from one night share one copy.
+      // Returns the list of files written.
       function saveSequenceFiles( seq, dir ) {
          var written = [];
-         var base = dir + "/" + seq.chartId;
+         var path = dir + "/" + seq.chartId + ".csv";
          try {
-            if ( !File.exists( base + ".csv" ) ) {
-               writeSequenceCsv( seq, base + ".csv" );
-               written.push( base + ".csv" );
-            }
-            if ( seq.pngData && !File.exists( base + ".png" ) ) {
-               File.writeFile( base + ".png", seq.pngData );
-               written.push( base + ".png" );
+            if ( !File.exists( path ) ) {
+               writeSequenceCsv( seq, path );
+               written.push( path );
             }
          } catch ( e ) {
             console.warningln( "Could not save the comparison sequence in " + dir + ": " +
                                ( (e && e.message) ? e.message : String(e) ) );
          }
-         if ( !seq.pngData && !File.exists( base + ".png" ) )
-            console.warningln( "Finder chart " + seq.chartId + ".png not saved — it could not be " +
-                               "downloaded. It can be viewed at " + escHtml( seq.imageUri ) );
          return written;
+      }
+
+      // Downloads the finder chart into `dir` as <chartId>.png, unless it is
+      // already there (same request → same chart ID, so it never changes).
+      // Failure is a warning with the chart's URL; the report is already saved.
+      function saveChartImage( seq, dir ) {
+         var path = dir + "/" + seq.chartId + ".png";
+         if ( File.exists( path ) ) {
+            console.writeln( "Finder chart " + seq.chartId + ".png already saved in this folder." );
+            return;
+         }
+         // Console only — setStatus would overwrite the Comp Stars step's label.
+         console.writeln( "<b>Downloading finder chart " + seq.chartId + ".png (gives up after " +
+                          VSP_PNG_TIMEOUT_S + " s)…</b>" );
+         CoreApplication.processEvents();
+         var r = fetchChartImage( seq.imageUri );
+         if ( r.error ) {
+            console.warningln( "Finder chart not saved (" + r.error + "). It can be viewed at " +
+                               escHtml( seq.imageUri ) );
+            return;
+         }
+         try {
+            File.writeFile( path, r.data );
+            console.writeln( "Finder chart saved:\n  " + path );
+         } catch ( e ) {
+            console.warningln( "Could not save the finder chart in " + dir + ": " +
+                               ( (e && e.message) ? e.message : String(e) ) );
+         }
       }
 
       // ============================================================
@@ -2574,17 +2597,17 @@ class PhotometryDialog extends Dialog {
             throw new Error( "No non-blended V-band comparison stars in frame." );
 
          // PSF measurement — target + all in-frame candidates in one pass
-         var psfInput = [ { label: TARGET.name, x: _targetPix.x, y: _targetPix.y } ];
-         inFrame.forEach( function(e) {
-            psfInput.push( { label: e.star.label, x: e.x, y: e.y } );
+         var psfInput = [ { key: "target", x: _targetPix.x, y: _targetPix.y } ];
+         inFrame.forEach( function(e, i) {
+            psfInput.push( { key: "comp" + i, x: e.x, y: e.y } );
          });
-         setStatus( "Step 4/4: Fitting PSFs of " + TARGET.name + " and " + inFrame.length +
+         setStatus( "Step 3/3: Fitting PSFs of " + TARGET.name + " and " + inFrame.length +
                     " comparison stars (green and blue channels)…" );
          var psfFits   = fitPSF( _window, psfInput );      // green channel (TG)
          var psfFits_B = fitPSF( _window, psfInput, 2 );  // blue channel (TB)
 
-         _targetPSF   = psfFits[   TARGET.name ];
-         _targetPSF_B = psfFits_B[ TARGET.name ];
+         _targetPSF   = psfFits[   "target" ];
+         _targetPSF_B = psfFits_B[ "target" ];
          var targetReject = checkPSFQuality( _targetPSF, _targetPix.x, _targetPix.y );
          if ( targetReject )
             throw new Error( TARGET.name + " PSF rejected: " + targetReject );
@@ -2603,9 +2626,9 @@ class PhotometryDialog extends Dialog {
          console.writeln( "PSF — " + TARGET.name + ": " + psfLine( _targetPSF ) );
 
          // Quality-check every candidate and get its instrumental magnitudes
-         var measured = inFrame.map( function(e) {
-            var psf     = psfFits[   e.star.label ];
-            var psfB    = psfFits_B[ e.star.label ];
+         var measured = inFrame.map( function(e, i) {
+            var psf     = psfFits[   "comp" + i ];
+            var psfB    = psfFits_B[ "comp" + i ];
             var qMsg    = checkPSFQuality( psf,  e.x, e.y );
             var qMsgB   = checkPSFQuality( psfB, e.x, e.y );
             return {
@@ -2668,15 +2691,13 @@ class PhotometryDialog extends Dialog {
          // Default selection: top recommended stars, capped at ENSEMBLE_DEFAULT_MAX_N
          var recommended = _allInFrame.filter( function(e) { return e.recommended; } );
          var defSelected = recommended.slice( 0, ENSEMBLE_DEFAULT_MAX_N );
-         var selectedLabels = {};
-         defSelected.forEach( function(e) { selectedLabels[ e.star.label ] = true; } );
          _ensembleEntries = defSelected.slice();
 
          // Populate TreeBox
          self.compTreeBox.clear();
          _allInFrame.forEach( function(e) {
             var node = new TreeBoxNode( self.compTreeBox );
-            node.isCompSelected = !!selectedLabels[ e.star.label ];
+            node.isCompSelected = defSelected.indexOf( e ) >= 0;
             node._entry = e;
             node.setText( 0, node.isCompSelected ? "✓" : "—" );
             node.setText( 1, e.star.label );
@@ -2901,7 +2922,7 @@ class PhotometryDialog extends Dialog {
 
          // Check star (from _allInFrame cache; no second PSF fit)
          var checkEntry = _checkStar
-            ? _allInFrame.find( function(e) { return e.star.label === _checkStar.label; } )
+            ? _allInFrame.find( function(e) { return e.star === _checkStar; } )
             : null;
          var checkPix    = checkEntry ? { x: checkEntry.x, y: checkEntry.y } : null;
          var checkReject = checkEntry ? checkEntry.qualityMsg : null;
@@ -2994,7 +3015,7 @@ class PhotometryDialog extends Dialog {
                // evaluate because the discovery pass already fit a PSF (instMag) for all of
                // them, so no extra measurement is needed, just ZP + instMag per candidate.
                var alts = _checkEligible
-                  .filter( function(e) { return e.star.label !== _checkStar.label && e.instMag !== null; } )
+                  .filter( function(e) { return e.star !== _checkStar && e.instMag !== null; } )
                   .map( function(e) {
                      var pred = _ensembleZP + e.instMag;
                      return { label: String(e.star.label), magV: e.star.magV, pred: pred, dev: pred - e.star.magV };
@@ -3086,11 +3107,17 @@ class PhotometryDialog extends Dialog {
          if ( exptimeVal ) stackInfo += (stackInfo ? " x " : "") + exptimeVal + "s";
          var moonVal    = self.moonLbl.text !== "—" ? "moon " + self.moonLbl.text : "";
 
+         // Wide VSP charts reuse labels for stars of equal magnitude — name those
+         // stars by AUID so the notes identify each comp unambiguously.
+         var labelCount = {};
+         _seq.stars.forEach( function(s) { labelCount[ s.label ] = ( labelCount[ s.label ] || 0 ) + 1; } );
+         function starId( s ) { return labelCount[ s.label ] > 1 ? s.auid : s.label; }
+
          var N = _ensembleEntries.length;
-         var compList = _ensembleEntries.map( function(e) { return e.star.label; } ).join("+");
+         var compList = _ensembleEntries.map( function(e) { return starId( e.star ); } ).join("+");
          var notes = "TG green channel; DynamicPSF"
                    + "; comp " + compList
-                   + ( _checkStar ? "; check " + _checkStar.label : "" )
+                   + ( _checkStar ? "; check " + starId( _checkStar ) : "" )
                    + (stackInfo ? "; " + stackInfo : "")
                    + (moonVal   ? "; " + moonVal   : "");
 
@@ -3098,10 +3125,10 @@ class PhotometryDialog extends Dialog {
          if ( !isNaN(_tcrb_mag_B) ) {
             var tbCompList = _ensembleEntries
                .filter( function(e) { return e.star.magB !== null && e.instMagB !== null; } )
-               .map( function(e) { return e.star.label; } ).join("+");
+               .map( function(e) { return starId( e.star ); } ).join("+");
             tbNotes = "TB blue channel; DynamicPSF"
                     + "; comp " + tbCompList
-                    + ( _checkStar ? "; check " + _checkStar.label : "" )
+                    + ( _checkStar ? "; check " + starId( _checkStar ) : "" )
                     + (stackInfo ? "; " + stackInfo : "")
                     + (moonVal   ? "; " + moonVal   : "");
          }

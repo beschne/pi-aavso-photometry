@@ -1,10 +1,10 @@
 # Plan: generic target, automatic comparison stars
 
 Branch: `generic-target` (from `main` at v1.4.0). `main` stays the T CrB release.
-Status: **steps 1–8 done (2.0.0-dev).** Tested in PixInsight on a T CrB master:
-identical result to v1.4.0; manual coordinates, unknown name and unsaved stack
-also pass. Security audit done (no open findings). Open: a second target (needs a
-clear night; SS Cyg planned), then `2.0.0-rc.1`.
+Status: **steps 1–9 done (2.0.0-dev).** Tested in PixInsight on a T CrB master
+(identical result to v1.4.0; manual coordinates, unknown name and unsaved stack
+also pass) and on SS Cyg (second target; found and fixed the duplicate-label
+bug). Security audit done (no open findings). Next: `2.0.0-rc.1`.
 Last updated 2026-10-28.
 
 ## Goal
@@ -113,12 +113,18 @@ CSV file picker is removed.
 - Files: `<chartid>.csv` (`AUID,RA,Dec,Label,Band,Mag,Error,Comments`, V and
   B rows) and `<chartid>.png` (if it could be downloaded). Existing files in
   the export folder are kept, so several reports share one copy.
-- Discovery downloads the PNG into memory; if `<chartid>.png` already exists
-  in the last export folder it is read from there instead.
+- **Changed after the SS Cyg test:** the PNG is no longer fetched during
+  discovery (it cost 20 s per new chart and always failed). A second checkbox,
+  "Download finder chart" (off by default, `BeSchne/Photometry/saveChartWithReport`),
+  downloads it at export; the first checkbox is now "Save comparison stars"
+  (CSV only). Comp Stars has three stages instead of four.
 - These files are records of a run, not inputs. The CSV parser
   (`loadComparisonStars`, `parseCSVRow`, `readTextFile`) is removed.
-- The PNG download is limited to 20 s and only warns on failure (endpoint
-  currently returns HTTP 500); the console then prints the chart URL.
+- The PNG download is limited to 20 s and only warns on failure; the console
+  then prints the chart URL. Rechecked 2026-10-28: HTTP 500 after ~90 s for every
+  chart, even a fresh 30′ chart with 6 stars, with or without a browser user agent;
+  the chart page redirects to `/v2/vsp/chart/<id>`, which returns 404. The data
+  endpoints answer in < 1 s, so the fault is AAVSO's image renderer.
 - The sequence is cached for the dialog session (same image, name,
   coordinates, mag limit), so revisiting the Comp Stars step does not
   re-download.
@@ -171,7 +177,8 @@ CSV file picker is removed.
 
 ### 9. Testing
 
-- Offline (done 2026-10-28, 31/31 checks pass): the script's own functions,
+- Offline (done 2026-10-28, 31/31 checks pass; the harness was in the session
+  scratchpad and is gone — the duplicate-label fix was only syntax-checked offline): the script's own functions,
   loaded in Node with PJSR mocks, against saved responses (T CrB 60′ and
   900′/maglimit 5, RS Oph, SS Cyg, RA/Dec query, unknown name): XML parse,
   target coordinates, CSV writer, URL builder, manual RA/Dec parsing, FOV
@@ -183,7 +190,22 @@ CSV file picker is removed.
   - ✓ unknown name (`T CrX`) — VSX error shown, **Coordinates** ticked automatically
   - ✓ unsaved in-memory stack — discovery and export work
   - ✓ busy guard — closing and step clicks blocked during discovery
-  - ☐ second target — waiting for a clear night (SS Cyg first choice)
+- In PixInsight (user), 2026-10-28 on an SS Cyg master (Seestar S30P, 40 × 10 s):
+  - ✓ second target — 180′ chart X43358HAP, 96 stars, 70 in frame (field needs
+    290′, so the cap at 180′ for mag limit 14.5 and its warning were exercised)
+  - ✗→✓ **duplicate chart labels:** wide VSP charts reuse labels for stars of
+    equal magnitude (here two 114, two 116, two 118, four 134, …). PSF fits were
+    keyed by label, so same-label stars shared one fit and most were rejected
+    ("centroid ~1000 px from projected position"). Fixed: fits keyed per star,
+    comp/check selection matched by star, not label. Stars marked OK were never
+    affected (the 5 px position check held), so the first result was valid.
+  - ✓ report notes name stars with a duplicated label by AUID, e.g.
+    `comp 000-BCP-196+000-BKL-344+117+000-BLR-636+000-BCP-241+000-BCP-232; check 119`
+  - Result after the fix: SS Cyg 11.636 ± 0.032 TG, 12.374 ± 0.055 TB, 6 comps,
+    check 119 −0.023 mag (before: 11.602 ± 0.029, check 121 −0.049); submitted to AAVSO
+  - ✓ finder chart moved to export: Comp Stars shows Steps 1/3–3/3; chart
+    checkbox off → URL printed, on → 20 s attempt and warning; both checkboxes
+    remembered across restarts
 
 ## Open points
 
