@@ -2,8 +2,8 @@
 
 Branch: `generic-target` (from `main` at v1.4.0). `main` stays the T CrB release.
 Status: **steps 1–8 done (2.0.0-dev).** Tested in PixInsight on a T CrB master:
-identical result to v1.4.0. Open: rest of step 9 (second target, manual
-coordinates, unsaved stack), new screenshots, security audit, then `2.0.0-rc.1`.
+identical result to v1.4.0. Security audit done (no open findings). Open: rest of step 9 (second target,
+manual coordinates, unsaved stack), then `2.0.0-rc.1`.
 Last updated 2026-10-28.
 
 ## Goal
@@ -140,12 +140,12 @@ CSV file picker is removed.
 - `sample_comparison_stars.csv`
 - `tools/fetch-vsp.py`, `tools/README.md`
 
-### 8. Docs and version — done 2026-10-28, except new screenshots
+### 8. Docs and version — done 2026-10-28
 
 - README (EN + DE): replace "Get the comparison-star CSV", troubleshooting rows
   about CSVs, outburst instructions that call `fetch-vsp.py`, file list.
-- `docs/Photometry.html` and screenshots of the Setup step. **Screenshots still
-  show v1.x (CSV picker)** — need new captures from PixInsight. Also new in
+- `docs/Photometry.html` and screenshots — all seven steps re-captured as
+  `screenshot, v2.0.0-dev, …` (2026-10-28); READMEs and CLAUDE.md point to them. Also new in
   `docs/pjsr-api-notes.md`: NetworkTransfer, XMLDocument, and the regex-`//`
   preprocessor pitfall.
 - `CLAUDE.md`: architecture items 4–5, comparison-CSV bullet, default comp/check

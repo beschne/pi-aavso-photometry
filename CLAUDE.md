@@ -73,13 +73,13 @@ development. That mechanism is only for distributing the finished script to othe
 
 | Source (`screenshots/`) | Install as (`images/`) |
 |-------------------------|------------------------|
-| `screenshot, v1.3.0, (1) setup.png` | `setup.png` |
-| `screenshot, v1.2.0, (2) comp stars.png` | `comp-stars.png` |
-| `screenshot, v1.3.0, (3) photometry.png` | `photometry.png` |
-| `screenshot, v1.2.0, (4) mid-time.png` | `mid-time.png` |
-| `screenshot, v1.2.0, (5) verification.png` | `verification.png` |
-| `screenshot, v1.3.0, (6) report, human readable.png` | `report-human.png` |
-| `screenshot, v1.3.0, (6) report, aavso.png` | `report-aavso.png` |
+| `screenshot, v2.0.0-dev, (1) setup.png` | `setup.png` |
+| `screenshot, v2.0.0-dev, (2) comp stars.png` | `comp-stars.png` |
+| `screenshot, v2.0.0-dev, (3) photometry.png` | `photometry.png` |
+| `screenshot, v2.0.0-dev, (4) mid-time.png` | `mid-time.png` |
+| `screenshot, v2.0.0-dev, (5) verification.png` | `verification.png` |
+| `screenshot, v2.0.0-dev, (6) report, human readable.png` | `report-human.png` |
+| `screenshot, v2.0.0-dev, (6) report, aavso.png` | `report-aavso.png` |
 
 **pidoc path depth:** the HTML references `../../pidoc/` for CSS/JS (two levels up from `Photometry/` to `doc/`). Do not change this when editing the file.
 
