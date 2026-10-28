@@ -1,8 +1,10 @@
 # Plan: generic target, automatic comparison stars
 
 Branch: `generic-target` (from `main` at v1.4.0). `main` stays the T CrB release.
-Status: **steps 1–6 implemented in `aavso-photometry.js` (2.0.0-dev), not yet
-run in PixInsight.** Steps 7–9 open. Last updated 2026-10-28.
+Status: **steps 1–8 done (2.0.0-dev).** Tested in PixInsight on a T CrB master:
+identical result to v1.4.0. Open: rest of step 9 (second target, manual
+coordinates, unsaved stack), new screenshots, security audit, then `2.0.0-rc.1`.
+Last updated 2026-10-28.
 
 ## Goal
 
@@ -132,17 +134,20 @@ CSV file picker is removed.
   confirm AAVSO WebObs accepts that form; otherwise use the name as typed.
 - Remove remaining T CrB wording from labels and tooltips.
 
-### 7. Cleanup (confirm before deleting)
+### 7. Cleanup — done 2026-10-28 (confirmed by the user)
 
 - `charts/` (pre-fetched T CrB CSV/PNG + `charts/README.md`)
 - `sample_comparison_stars.csv`
 - `tools/fetch-vsp.py`, `tools/README.md`
 
-### 8. Docs and version
+### 8. Docs and version — done 2026-10-28, except new screenshots
 
 - README (EN + DE): replace "Get the comparison-star CSV", troubleshooting rows
   about CSVs, outburst instructions that call `fetch-vsp.py`, file list.
-- `docs/Photometry.html` and screenshots of the Setup step.
+- `docs/Photometry.html` and screenshots of the Setup step. **Screenshots still
+  show v1.x (CSV picker)** — need new captures from PixInsight. Also new in
+  `docs/pjsr-api-notes.md`: NetworkTransfer, XMLDocument, and the regex-`//`
+  preprocessor pitfall.
 - `CLAUDE.md`: architecture items 4–5, comparison-CSV bullet, default comp/check
   bullet, settings key, file table.
 - `TODO.md`: close "user-specifiable target star" and "FOV-aware comparison star
@@ -157,6 +162,8 @@ CSV file picker is removed.
      Increment `rc.N` for fixes.
   3. After merging to `main`: `VERSION = "2.0.0"`, tag `v2.0.0`, GitHub Release
      (see `PRIVATE_NOTES.md`).
+  - At each step, also update the help-page footer in `docs/Photometry.html`
+    (currently `2.0.0-dev`).
   - `main` stays at 1.4.0; urgent T CrB fixes ship from `main` as 1.4.x.
 - Repeat the security audit (`SECURITY_AUDIT.md`) — new network input and new
   file writes.

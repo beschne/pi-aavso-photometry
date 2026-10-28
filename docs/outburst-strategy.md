@@ -16,8 +16,7 @@ Borealis, scattered 1–8° away.
 
 ## Which comp stars are in the AAVSO sequence?
 
-Here are the stars brighter than V = 5 on chart X42615CFQ (900′ field, the widest
-pre-fetched chart), with their angular distance from T CrB:
+Here are the stars brighter than V = 5 on chart X42615CFQ (900′ field, fetched July 2026), with their angular distance from T CrB:
 
 | Chart label | V mag | Sep. | dRA | dDec | Identity |
 |:-----------:|------:|-----:|----:|-----:|----------|
@@ -73,15 +72,19 @@ tool for peak brightness (1–3 mag), when T CrB rivals the brightest comp stars
 telescope frame can reach. Use an OSC or monochrome camera body; the same script and
 AAVSO report format apply.
 
-## Recommended chart and command per phase
+## Recommended instrument and Comp mag limit per phase
 
-| T CrB brightness | Best instrument | Chart | Fetch command (if needed) |
-|-----------------|-----------------|-------|---------------------------|
-| ~10 mag (quiescence) | Seestar S30 Pro | [`charts/X42615CFD.csv`](../charts/X42615CFD.png) (450′) | already available |
-| 8–10 mag (brightening) | Seestar S30 Pro | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | already available |
-| 4–8 mag | Seestar S30 Pro or RedCat 51 + APS-C | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | already available |
-| 2–4 mag | RedCat 51 + full-frame | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) (900′, maglimit 5) | already available |
-| ~2 mag (peak) | Camera lens | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) or AAVSO Alert Notice chart | follow Alert Notice; run fetch-vsp.py with specified FOV |
+Since v2.0.0 the script downloads the comparison stars itself, sized to the plate-solved
+frame. The only choice left is the **Comp mag limit** in the Setup step. VSP allows charts
+wider than 180′ only with a limit of 12 or brighter — so for wide fields use ≤ 12.
+
+| T CrB brightness | Best instrument | Comp mag limit | Notes |
+|-----------------|-----------------|----------------|-------|
+| ~10 mag (quiescence) | Seestar S30 Pro | 12 (whole frame) or 14.5 (180′ chart, more faint comps) | default ensemble: labels 98, 106, 107, 93, 112, 84 |
+| 8–10 mag (brightening) | Seestar S30 Pro | 12 | brighter comps (84, 79) are pre-selected automatically |
+| 4–8 mag | Seestar S30 Pro or RedCat 51 + APS-C | 10 | |
+| 2–4 mag | RedCat 51 + full-frame | 6 | |
+| ~2 mag (peak) | Camera lens | 5 | follow the AAVSO Alert Notice |
 
 At peak, T CrB will saturate even at very short exposures through a telescope. Drop to
 the shortest sub-second frames your camera allows; the script's reference-file time
@@ -90,17 +93,12 @@ entry handles arbitrary sub durations.
 ## When the outburst is confirmed
 
 AAVSO will issue an Alert Notice with chart, exposure, and reporting guidance — watch
-[aavso.org/news](https://www.aavso.org/news). The Alert Notice names a specific chart ID;
-run `fetch-vsp.py` with that chart's FOV and maglimit to pull the matching CSV, or wait
-for the AAVSO VSP API to come back online (v2 migration).
+[aavso.org/news](https://www.aavso.org/news). If the Alert Notice names a magnitude limit,
+enter it as **Comp mag limit**; the script requests the sequence for your frame and writes
+its chart ID into the report.
 
-Two charts are already fetched and ready:
-
-- **[`charts/X42615CFQ.csv`](../charts/X42615CFQ.png)** — 900′, maglimit 14.5, 370 stars. Good at any brightness:
-  the faint comp stars carry the ensemble at quiescence, and the bright ones (labels 22–50)
-  cover the outburst range.
-- **[`charts/X42615CHL.csv`](../charts/X42615CHL.png)** — 900′, maglimit 5, 9 stars (V 2.2–5.0). The outburst chart:
-  bright stars only, no faint clutter. Its contents:
+With a Comp mag limit of 5 and a 900′ chart (July 2026), VSP returned only these 9 bright
+stars (V 2.2–5.0) — the outburst comp set:
 
   | Label | V | Notes |
   |:-----:|--:|-------|

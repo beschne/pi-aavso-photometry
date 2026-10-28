@@ -405,9 +405,14 @@ Requires `#include <pjsr/DataType.jsh>` — the `DataType_*` constants are not a
 
 ```js
 // Namespaced under "BeSchne/Photometry/"
-var path = Settings.read("BeSchne/Photometry/comparisonCsvPath", DataType_String);
-Settings.write("BeSchne/Photometry/comparisonCsvPath", DataType_String, value);
-Settings.remove("BeSchne/Photometry/comparisonCsvPath");
+var name = Settings.read("BeSchne/Photometry/objectName", DataType_String);
+Settings.write("BeSchne/Photometry/objectName", DataType_String, value);
+Settings.remove("BeSchne/Photometry/objectName");
+
+// Non-string values: check Settings.lastReadOK — read() of a missing key
+// does not throw.
+var v = Settings.read("BeSchne/Photometry/compMagLimit", DataType_Double);
+if ( !Settings.lastReadOK ) v = 14.5;
 ```
 
 Key constants from `DataType.jsh`:
@@ -430,7 +435,7 @@ Pragmas are **bare directives with no `//` prefix**. They are processed by the P
 ```
 #engine v8
 
-#feature-id    BeSchne > Photometry
+#feature-id    BeSchne > AAVSO Photometry
 
 #feature-info  Description text. Multi-line with trailing \
                continuation backslash.
@@ -443,4 +448,70 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 - **`CoreApplication.ensureMinimumVersion( 1, 9, 4 )`** — first JS statement; fails fast with a clear message on older PI builds.
 - `#feature-icon  path/to/icon.svg` — optional; omit if no icon file.
 
-Required for `Script > Feature Scripts… > Add` registration under `Script > BeSchne > Photometry`. Not required for `Script > Execute Script File…` — the script runs either way.
+Required for `Script > Feature Scripts… > Add` registration under `Script > BeSchne > AAVSO Photometry`. Not required for `Script > Execute Script File…` — the script runs either way.
+
+## Preprocessor: no `//` inside regex literals
+
+The PJSR preprocessor (which handles `#include`, `#define`, `#feature-*`) strips
+`//` comments **before** V8 parses the file — and it does not recognise regex
+literals. A regex such as `/^https:\/\/apps\.aavso\.org\//` contains `\//`, which
+the preprocessor takes as the start of a comment; the rest of the line is lost and
+the script fails to load:
+
+```
+SyntaxError: Invalid regular expression: missing /
+```
+
+Use string methods instead (`s.indexOf( "https://apps.aavso.org/" ) === 0`).
+`//` inside ordinary string literals is handled correctly. Found 2026-10-28 in
+the first PixInsight run of v2.0.0-dev.
+
+## HTTP downloads: `NetworkTransfer`
+
+Built in — no `#include` needed. Synchronous; data arrives in chunks through
+`onDownloadDataAvailable`. Pattern used by `httpGet()` in the script (verified in
+PI 1.9.4 against apps.aavso.org):
+
+```js
+var data = new ByteArray;
+var t0   = Date.now();
+var T = new NetworkTransfer;
+T.setURL( url );
+T.setSSL();                                   // HTTPS
+T.setConnectionTimeout( 30 );                 // connection phase only!
+T.setCustomHTTPHeaders( [ "User-Agent: …" ] );
+T.onDownloadDataAvailable = function( chunk ) { data.add( chunk ); return true; };
+T.onTransferProgress = function( dlTotal, dlCurrent, ulTotal, ulCurrent ) {
+   CoreApplication.processEvents();
+   return Date.now() - t0 < maxSeconds * 1000;  // false aborts the transfer
+};
+var ok   = T.download();                      // false on error or abort
+var code = T.responseCode;                    // HTTP status
+var type = T.contentType;
+var text = data.utf8ToString();
+var err  = T.errorInformation;
+```
+
+- `setConnectionTimeout()` does **not** limit the total transfer time. A server
+  that accepts the connection and then hangs (the VSP chart PNG endpoint, HTTP 500
+  after ~90 s) blocks until the `onTransferProgress` abort fires — verified to
+  work: "no complete response within 20 s".
+- The PixInsight console interprets `&` and `<…>` as markup; wrap URLs in
+  `<raw>…</raw>` when printing them with `console.writeln()`.
+- Write binary data with `File.writeFile( path, byteArray )`; read it back with
+  `File.readFile( path )`.
+
+## XML parsing: `XMLDocument`
+
+Built in. Used for the VSP chart API response:
+
+```js
+var doc = new XMLDocument;
+doc.parse( text );                                // throws on malformed XML
+var root  = doc.rootElement;                      // XMLElement
+var items = root.childElementsByName( "list-item" );  // direct children only
+var txt   = items[0].childElementsByName( "auid" )[0].text;
+```
+
+`childElementsByName( name[, recursive = false] )` returns a JS `Array`, so nested
+elements with the same name (`<list-item>` inside `<bands>`) are not mixed up.

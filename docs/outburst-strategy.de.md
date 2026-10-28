@@ -17,7 +17,7 @@ sind fast alle andere Mitglieder der Corona Borealis — und die stehen 1–8° 
 
 ## Welche Vergleichssterne enthält die AAVSO-Sequenz?
 
-Karte X42615CFQ (900′-Feld, die weiteste vorgehaltene Karte) listet folgende Sterne
+Karte X42615CFQ (900′-Feld, abgerufen Juli 2026) listet folgende Sterne
 heller als V = 5 samt ihrem Winkelabstand zu T CrB:
 
 | Karten-Label | V-Mag | Abstand | dRA | dDec | Identität |
@@ -76,15 +76,19 @@ Maximalhelligkeit (1–3 mag), wenn T CrB die hellsten Vergleichssterne in jedem
 Teleskop-Bildfeld überstrahlt. Man braucht dafür einen OSC- oder Monochrom-Body;
 Skript und AAVSO-Berichtsformat bleiben dieselben.
 
-## Empfohlene Karte und Befehl je Phase
+## Empfohlene Ausrüstung und Grenzhelligkeit je Phase
 
-| T-CrB-Helligkeit | Beste Ausrüstung | Karte | Befehl (falls neu laden nötig) |
-|-----------------|-----------------|-------|--------------------------------|
-| ~10 mag (Ruhe) | Seestar S30 Pro | [`charts/X42615CFD.csv`](../charts/X42615CFD.png) (450′) | bereits vorhanden |
-| 8–10 mag (Aufhellung) | Seestar S30 Pro | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | bereits vorhanden |
-| 4–8 mag | Seestar S30 Pro oder RedCat 51 + APS-C | [`charts/X42615CFQ.csv`](../charts/X42615CFQ.png) (900′) | bereits vorhanden |
-| 2–4 mag | RedCat 51 + Vollformat | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) (900′, Grenzhelligkeit 5) | bereits vorhanden |
-| ~2 mag (Maximum) | Kameraobjektiv | [`charts/X42615CHL.csv`](../charts/X42615CHL.png) oder Karte aus der AAVSO Alert Notice | Alert Notice folgen; fetch-vsp.py mit dem angegebenen Bildfeld ausführen |
+Seit v2.0.0 lädt das Skript die Vergleichssterne selbst, passend zum plate-gesolvten
+Bildfeld. Zu wählen bleibt nur die **Comp mag limit** im Setup. VSP erlaubt Karten über
+180′ nur mit einer Grenze von 12 oder heller — für weite Felder also ≤ 12 verwenden.
+
+| T-CrB-Helligkeit | Beste Ausrüstung | Comp mag limit | Hinweis |
+|-----------------|-----------------|----------------|---------|
+| ~10 mag (Ruhe) | Seestar S30 Pro | 12 (ganzes Bild) oder 14,5 (180′-Karte, mehr schwache Comps) | Standard-Ensemble: Labels 98, 106, 107, 93, 112, 84 |
+| 8–10 mag (Aufhellung) | Seestar S30 Pro | 12 | hellere Comps (84, 79) werden automatisch vorausgewählt |
+| 4–8 mag | Seestar S30 Pro oder RedCat 51 + APS-C | 10 | |
+| 2–4 mag | RedCat 51 + Vollformat | 6 | |
+| ~2 mag (Maximum) | Kameraobjektiv | 5 | AAVSO Alert Notice folgen |
 
 Am Maximum sättigt T CrB selbst bei sehr kurzen Belichtungen im Teleskop. Nimm die
 kürzestmöglichen Subframes im Sekundenbruchteil, die deine Kamera zulässt — die
@@ -94,18 +98,12 @@ zurecht.
 ## Wenn der Ausbruch bestätigt ist
 
 Die AAVSO gibt eine Alert Notice mit Karten-, Belichtungs- und Meldeempfehlungen
-heraus — behalte [aavso.org/news](https://www.aavso.org/news) im Auge. Die Alert
-Notice nennt eine konkrete Karten-ID; führe `fetch-vsp.py` mit deren Bildfeld und
-Grenzhelligkeit aus, um die passende CSV zu ziehen — oder warte, bis die AAVSO-VSP-API
-nach der v2-Migration wieder läuft.
+heraus — behalte [aavso.org/news](https://www.aavso.org/news) im Auge. Nennt die Alert
+Notice eine Grenzhelligkeit, diese als **Comp mag limit** eintragen; das Skript fordert
+die Sequenz für dein Bildfeld an und schreibt deren Karten-ID in den Bericht.
 
-Zwei Karten liegen bereits fertig vor:
-
-- **[`charts/X42615CFQ.csv`](../charts/X42615CFQ.png)** — 900′, Grenzhelligkeit 14,5, 370 Sterne. Bei jeder
-  Helligkeit brauchbar: Die schwachen Vergleichssterne tragen in Ruhe das Ensemble,
-  die hellen (Labels 22–50) decken den Ausbruchsbereich ab.
-- **[`charts/X42615CHL.csv`](../charts/X42615CHL.png)** — 900′, Grenzhelligkeit 5, 9 Sterne (V 2,2–5,0). Die
-  Ausbruchskarte: weniger Ablenkung, nur helle Sterne. Sie enthält:
+Mit Comp mag limit 5 und einer 900′-Karte (Juli 2026) lieferte VSP nur diese 9 hellen
+Sterne (V 2,2–5,0) — der Vergleichssternsatz für den Ausbruch:
 
   | Label | V | Hinweis |
   |:-----:|--:|---------|

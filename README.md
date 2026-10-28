@@ -14,8 +14,11 @@ stars directly inside PixInsight and writes an **AAVSO Extended File Format** re
 platform widely used in the astrophotography community; PJSR is its built-in JavaScript
 scripting environment.
 
-Currently configured for **T Coronae Borealis** ("Blaze Star"), a recurrent nova
-expected to brighten by ~8 magnitudes from quiescence (~10 mag) to outburst (~2 mag).
+It works for **any variable star with an AAVSO comparison sequence**: enter the star's
+AAVSO name, and the script downloads the comparison stars from the AAVSO Variable Star
+Plotter (VSP) itself — no manual chart or CSV download. It was developed for
+**T Coronae Borealis** ("Blaze Star"), a recurrent nova expected to brighten by
+~8 magnitudes from quiescence (~10 mag) to outburst (~2 mag).
 
 The script measures in **two photometric bands per run** — TG (green channel, V-calibrated)
 and TB (blue channel, B-calibrated) — and writes one AAVSO observation line per band.
@@ -34,7 +37,8 @@ The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-
 
 - **PixInsight 1.9.4 "Lockhart"** or later (V8 JS engine required)
 - An open, plate-solved OSC (one-shot colour) RGB master light stack, debayered in PixInsight
-- A comparison-star CSV exported from [AAVSO VSP](https://www.aavso.org/vsp)
+- The target's AAVSO (VSX) name, e.g. `T CrB` — or its J2000 coordinates
+- An internet connection (the comparison stars are downloaded from [AAVSO VSP](https://www.aavso.org/vsp))
 
 ## Input image preconditions
 
@@ -57,34 +61,7 @@ The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-
 Clone or download this repository and place it in a convenient folder on your machine.
 No installation or PixInsight restart is required.
 
-### 2. Get the comparison-star CSV
-
-The script needs a photometry table listing comparison stars and their catalogue magnitudes.
-Pre-fetched CSVs for T CrB at common field sizes are already included in `charts/`:
-
-| File | FoV | Best for |
-|------|-----|----------|
-| `charts/X42615NN.csv` | 60′ | Seestar / small-scope at quiescence |
-| `charts/X42615CFO.csv` | 120′ | |
-| `charts/X42615CFP.csv` | 180′ | |
-| `charts/X42615CFD.csv` | 450′ | Default — wide margin around the target |
-| `charts/X42615CFQ.csv` | 900′ | Outburst — brighter comp stars at larger separations |
-
-To refresh them or generate one for a different field size, run from the repository root:
-
-```bash
-python3 tools/fetch-vsp.py --fov 60 --maglimit 14.5
-```
-
-See `tools/README.md` for all options. The chart ID printed to the console (e.g. `X42615NN`)
-is the value to enter in the AAVSO `CHART` report field — it is also the CSV filename.
-
-> **Why the script can't fetch this automatically:** the AAVSO VSP is mid-migration to a
-> new platform (v2) and the machine-readable API endpoint is currently unavailable.
-> The `fetch-vsp.py` tool works around this by scraping the HTML photometry table,
-> which is still served. This note will be removed once the API is restored.
-
-### 3. Prepare your image in PixInsight
+### 2. Prepare your image in PixInsight
 
 Open your **linear, plate-solved OSC RGB master stack** as the active window.
 If the stack is not yet plate-solved, run `Script > Astronomy > ImageSolver` first.
@@ -93,29 +70,45 @@ If the stack is not yet plate-solved, run `Script > Astronomy > ImageSolver` fir
 > disk. If incompatible processes (stretch, deconvolution, BlurXTerminator) are
 > detected, a red warning appears on the Photometry step.
 
-### 4. Run the script
+### 3. Run the script
 
 - **Quick run (no menu entry):** `Script > Execute Script File…` → select `aavso-photometry.js`
 - **With menu entry:** `Script > Feature Scripts… > Add` the script directory once.
-  PixInsight registers it under `Script > BeSchne > Photometry` and picks up code
+  PixInsight registers it under `Script > BeSchne > AAVSO Photometry` and picks up code
   changes on every subsequent run without rescanning.
 
-### 5. Work through the six wizard steps
+### 4. Work through the six wizard steps
 
 **Step 1 — Setup**
 
 | Field | What to do |
 |-------|------------|
 | **Active image** | Confirm it shows your stack |
-| **Comparison CSV** | Browse to the CSV you downloaded in step 2 |
+| **Image field** | Read-only: the image's field of view from the plate solution |
+| **Object** | The target's AAVSO (VSX) name, e.g. `T CrB` or `RS Oph` (remembered) |
+| **Comp mag limit** | Faintest comparison stars to download (default 14.5, remembered). Lower it for a bright target |
+| **Coordinates** | Only if AAVSO does not know the name: tick it and enter RA (`HH:MM:SS` or degrees) and Dec. It is ticked automatically when the name lookup fails |
 | **Observer code** | Enter your AAVSO observer code |
 
 **Step 2 — Comp Stars**
 
-The script runs a PSF discovery pass on all in-frame V-band candidates and presents
-them in a table with V mag, Δmag from target, and PSF quality notes. Stars that pass
-quality checks and are within 2 magnitudes of the target are pre-ticked as the ensemble.
+Entering this step downloads the comparison stars and measures them. The status line
+shows each stage:
+
+1. Looking up the object at AAVSO — gets the target's coordinates
+2. Downloading the comparison stars — the chart is sized from the plate solution to
+   cover the whole image around the target
+3. Downloading the finder chart image (gives up after 20 s; it is optional)
+4. Fitting PSFs of the target and all in-frame comparison stars
+
+The candidates appear in a table with V mag, Δmag from the target, and PSF quality
+notes. Δmag is measured from a preliminary estimate of the target's brightness in
+this image, so no catalogue magnitude of the target is needed. Stars that pass quality
+checks and are within 2 magnitudes of the target are pre-ticked as the ensemble.
 Click any row to toggle it. Select the **Check star** from the dropdown at the bottom.
+
+The download is reused while the image, object, coordinates and mag limit stay the
+same, so going back and forth between steps does not repeat it.
 
 **Step 3 — Photometry**
 
@@ -148,7 +141,13 @@ A human-readable report is generated automatically when you enter this step.
 Switch to **AAVSO Extended Format** for submission, then click **Export…** and save
 with a `.txt` extension.
 
-### 8. Submit to AAVSO
+With **Also save comparison stars and finder chart** ticked (default, remembered),
+Export also writes `<chart ID>.csv` — the comparison stars used — and `<chart ID>.png`
+(the finder chart, if it could be downloaded) into the report's folder. Files that
+already exist there are kept. AAVSO revises sequences over time, so this preserves
+exactly what the report's `CHART` field refers to.
+
+### 5. Submit to AAVSO
 
 1. Go to the [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) form and log in
 2. In the first field, select **File upload** (not Manual)
@@ -162,8 +161,8 @@ with a `.txt` extension.
 
 T CrB is expected to brighten by ~8 magnitudes from quiescence (~10 V) to nova peak (~2 V).
 
-For detailed equipment and chart guidance — which comp stars fit in which frame at which
-brightness, and which chart CSV to load at each phase — see
+For detailed equipment guidance — which comp stars fit in which frame at which
+brightness, and which Comp mag limit to use at each phase — see
 [docs/outburst-strategy.md](docs/outburst-strategy.md).
 
 ### Why TB matters most for outburst detection
@@ -190,28 +189,23 @@ This is why TR is not measured: at quiescence the red channel is overwhelmingly
 M-giant photospheric emission; the WD/disk contribution is a small fraction of the
 total Rc flux, making TR the least sensitive band for detecting nova precursors.
 
-### Stage 1 — Early brightening (~7–9 mag): change comp/check labels
+### Stage 1 — Early brightening (~7–9 mag): nothing to change
 
-Chart **X42597QE** contains brighter comp stars for this stage:
+The comp ensemble is pre-selected relative to the target's brightness *measured in the
+image*, so brighter comp stars (e.g. labels `84` at 8.4 V and `79` at 7.9 V near T CrB)
+are picked automatically as T CrB brightens. Check the selection in the Comp Stars step
+and adjust the ticks if needed.
 
-| Label | AUID | V mag | Use when T CrB is |
-|-------|------|-------|-------------------|
-| `98`  | `000-BBW-796` | 9.809 | Quiescence (~10 V) |
-| `106` | `000-BJS-901` | 10.554 | Quiescence (check star) |
-| `84`  | `000-BBW-888` | 8.361 | Brightening, ~7–9 mag |
-| `79`  | `000-BBW-881` | 7.886 | Brightening, ~7–9 mag |
-
-Change the **Comp** and **Check** dropdowns in the Setup step before running.
-The dropdowns always reset to the brightest available stars when the script starts.
-
-### Stage 2 — Nova peak (~2–6 mag): get a new VSP chart
+### Stage 2 — Nova peak (~2–6 mag): lower the Comp mag limit
 
 At peak brightness T CrB will saturate any normal exposure. You will need very short
-sub-second frames, and the faint comp stars in X42597QE may be undetectable.
+sub-second frames, and faint comp stars may be undetectable.
 
-1. Run `python3 tools/fetch-vsp.py --fov 180 --maglimit 6` to get a new CSV with brighter comp stars; the chart ID is printed to the console
-2. Load it via the **Browse** button and enter suitable comp/check labels
-3. Update the `CHART` constant in the script (line ~40) to the new chart ID
+1. Set **Comp mag limit** in the Setup step to about 2–3 magnitudes fainter than the
+   expected target brightness (e.g. `8` for a 5-mag target)
+2. With a limit of **12 or brighter**, AAVSO VSP allows charts wider than 180′ (up to
+   1200′ in the script), so wide-field instruments get comp stars across the whole frame
+3. The chart ID of the new sequence goes into the report automatically
 
 AAVSO will issue Alert Notices with specific chart and exposure guidance when the
 outburst begins — monitor [aavso.org/news](https://www.aavso.org/news).
@@ -237,6 +231,16 @@ At nova peak (~2 mag) the nearest suitable comparison stars (1–4 mag) may lie 
 this window. In that case consider a wider-field instrument, visual observation, or
 ensemble photometry of fainter in-frame stars.
 
+**AAVSO VSP chart size vs. mag limit.** VSP allows charts wider than 180′ only with a
+mag limit of 12 or brighter. With a fainter limit (default 14.5) the script requests a
+180′ chart and warns in the console that comparison stars near the image corners are
+missing — for a wide field such as the Seestar's 4.3° × 2.4°, set the limit to 12 to
+cover the whole frame.
+
+**Internet connection required.** The comparison stars are downloaded at run time;
+there is no offline mode. The finder chart image is optional: if the VSP image
+server does not answer within 20 s, the console prints the chart's URL instead.
+
 **DATE-OBS unreliable for stacked masters.** PixInsight's `ImageIntegration` writes
 `DATE-OBS` as the midpoint of sub *start* times, ignoring exposure duration. Always
 use the **reference-file buttons** in the Timing section to set Start and End from
@@ -251,10 +255,13 @@ actual subframes rather than trusting the stack's `DATE-OBS`.
 | *No active image window* | No stack is open, or it is not the active window | Open the master stack and click its title bar |
 | *Not a plate-solved image* | No WCS solution found | Run `Script > Astronomy > ImageSolver` on the stack first |
 | *Expected a debayered OSC … RGB image* | Image is monochrome, a single-channel extract, or an undebayered Bayer raw | Run the Debayer process in PixInsight first, then use the full debayered RGB master |
-| *Star outside the image frame* | Comp or check star label not in the FOV | Choose a different label from the dropdown |
+| *AAVSO VSP: Star … does not exist in VSX* | AAVSO does not know the object name | Check the spelling (e.g. `T CrB`), or enter the coordinates (the **Coordinates** box is ticked automatically) |
+| *AAVSO VSP request failed* | No internet connection, or AAVSO is down | Check the connection and retry; the console shows the request URL |
+| *Comp mag limit must be a V magnitude* | Empty or invalid mag limit | Enter a number, e.g. `14.5` |
+| *… is outside the image frame* | The target is not in this image | Check the object name / coordinates and the plate solution |
+| *No comparison star with a usable PSF* | All in-frame comp stars failed the PSF checks | Adjust the Comp mag limit; check focus, saturation and plate solution |
 | *PSF rejected — too faint* | Star too dim for a reliable Gaussian fit | Choose a brighter comp/check label |
 | *PSF rejected — saturated* | Star clipped in the master | Choose a fainter comp/check label or reduce exposure |
-| *No usable V-band rows found* | Wrong CSV file or column mismatch | Re-export from AAVSO VSP and check the CSV has the expected columns |
 | Red warning: *forbidden process detected* | Stack was stretched or deconvolved | Re-stack from calibrated subs without applying any stretch or sharpening |
 | Orange warning: *check-star deviation > 3×MERR* | Possible systematic error | Check the Verification thumbnail for wrong-star or blending issues; inspect atmospheric conditions |
 
@@ -266,7 +273,7 @@ actual subframes rather than trusting the stack's `DATE-OBS`.
 records and quick review.
 
 **AAVSO Extended Format** (on demand): comma-delimited CSV for direct submission via
-the [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) form (select **File upload**). The report contains one observation line per measured band (`FILT=TG` and `FILT=TB`), sharing the same DATE, AMASS, and CHART. Key choices: `TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
+the [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) form (select **File upload**). The report contains one observation line per measured band (`FILT=TG` and `FILT=TB`), sharing the same DATE, AMASS, and CHART. Key choices: `TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`; `NAME` is the star name as AAVSO returns it (e.g. `T CrB`) and `CHART` is the chart ID of the downloaded sequence (e.g. `X43358CRK`).
 
 ---
 
@@ -298,16 +305,14 @@ To install it:
 
 ```
 aavso-photometry.js          Main script
-sample_comparison_stars.csv  Format sample for the comparison-star CSV
 docs/
   Photometry.html            Native PixInsight help page (install into PI doc tree)
   aavso-extended-format.md   AAVSO Extended File Format field spec
   domain-knowledge.md        Photometry constants and science notes
-charts/
-  X42597QE.csv               AAVSO VSP export for chart X42597QE
-  X42597QE.png               AAVSO finder chart for T CrB (and additional charts)
+  outburst-strategy.md       T CrB outburst equipment guidance (also .de.md)
   time-handling.md           Mid-exposure time specification
   pjsr-api-notes.md          Verified PJSR API patterns and pitfalls
+  plan-generic-target.md     v2.0 plan: any target, automatic comparison stars
 screenshots/                 Dialog screenshots (all versions)
 CLAUDE.md                    AI coding-assistant guidance
 TODO.md                      Build checklist and roadmap
@@ -319,8 +324,8 @@ TODO.md                      Build checklist and roadmap
 
 - ~~Ensemble photometry~~ — done (v1.2.0)
 - ~~Multiband TG + TB~~ — done (v1.3.0)
+- ~~User-specifiable target star, automatic comparison stars from AAVSO VSP~~ — done (v2.0.0)
 - TG→V, TB→B colour transformation (`TRANS=YES`)
-- User-specifiable target star
 
 ---
 

@@ -13,7 +13,10 @@ direkt in PixInsight durchführt und einen **AAVSO Extended File Format**-Berich
 [PixInsight](https://pixinsight.com) ist eine professionelle Bildverarbeitungsplattform
 für Astrofotografie; PJSR ist die darin enthaltene JavaScript-Skriptumgebung.
 
-Aktuell konfiguriert für **T Coronae Borealis** ("Blaze Star"), eine rekurrente Nova,
+Es funktioniert für **jeden Veränderlichen mit einer AAVSO-Vergleichssternsequenz**: Den
+AAVSO-Namen des Sterns eingeben, und das Skript lädt die Vergleichssterne selbst aus dem
+AAVSO Variable Star Plotter (VSP) — kein manuelles Herunterladen von Karten oder CSVs.
+Entwickelt wurde es für **T Coronae Borealis** ("Blaze Star"), eine rekurrente Nova,
 die sich von Ruhelage (~10 mag) bis Ausbruch (~2 mag) um ~8 Größenklassen aufhellt.
 
 Das Skript misst in **zwei photometrischen Bändern pro Durchlauf** — TG (grüner Kanal,
@@ -34,7 +37,8 @@ Der Dialog ist ein sechsstufiger Assistent — Setup → Vergleichssterne → Ph
 
 - **PixInsight 1.9.4 „Lockhart"** oder neuer (V8-JS-Engine erforderlich)
 - Ein geöffneter, plate-gesolvter OSC-(One-Shot-Color-)RGB-Master-Light-Stack, debayert in PixInsight
-- Eine Vergleichsstern-CSV aus dem [AAVSO VSP](https://www.aavso.org/vsp)
+- Der AAVSO-(VSX-)Name des Ziels, z. B. `T CrB` — oder seine J2000-Koordinaten
+- Eine Internetverbindung (die Vergleichssterne werden aus dem [AAVSO VSP](https://www.aavso.org/vsp) geladen)
 
 ## Vorbedingungen für das Eingabebild
 
@@ -57,34 +61,7 @@ Der Dialog ist ein sechsstufiger Assistent — Setup → Vergleichssterne → Ph
 Repository klonen oder herunterladen und in einem beliebigen Ordner ablegen.
 Keine Installation, kein Neustart von PixInsight erforderlich.
 
-### 2. Vergleichsstern-CSV herunterladen
-
-Das Skript benötigt eine Photometrietabelle mit Vergleichssternen und ihren Kataloghelligkeiten.
-Vorberechnete CSVs für T CrB in gängigen Bildfeldern sind bereits im Ordner `charts/` enthalten:
-
-| Datei | Bildfeld | Am besten für |
-|-------|----------|---------------|
-| `charts/X42615NN.csv` | 60′ | Seestar / Kleinteleskop in Ruhelage |
-| `charts/X42615CFO.csv` | 120′ | |
-| `charts/X42615CFP.csv` | 180′ | |
-| `charts/X42615CFD.csv` | 450′ | Standard — breiter Bereich um das Ziel |
-| `charts/X42615CFQ.csv` | 900′ | Ausbruch — hellere Comp-Sterne in größerem Abstand |
-
-Zum Aktualisieren oder für ein anderes Bildfeld, vom Repository-Stammverzeichnis aus ausführen:
-
-```bash
-python3 tools/fetch-vsp.py --fov 60 --maglimit 14.5
-```
-
-Details zu allen Optionen: `tools/README.md`. Die Karten-ID, die das Tool ausgibt (z. B. `X42615NN`),
-ist der Wert für das AAVSO-Berichtsfeld `CHART` — sie entspricht auch dem CSV-Dateinamen.
-
-> **Warum das Skript diese Daten nicht automatisch abrufen kann:** Der AAVSO-VSP befindet sich
-> gerade in einer Plattformmigration (v2), und der maschinenlesbare API-Endpunkt ist derzeit
-> nicht verfügbar. Das Tool `fetch-vsp.py` umgeht dies durch Auslesen der HTML-Photometrietabelle,
-> die weiterhin bereitgestellt wird. Dieser Hinweis entfällt, sobald die API wieder verfügbar ist.
-
-### 3. Bild in PixInsight vorbereiten
+### 2. Bild in PixInsight vorbereiten
 
 Den **linearen, plate-gesolvten OSC-RGB-Master-Stack** als aktives Fenster öffnen.
 Falls noch kein Plate-Solve vorliegt, zuerst `Skript > Astronomie > ImageSolver` ausführen.
@@ -93,30 +70,46 @@ Falls noch kein Plate-Solve vorliegt, zuerst `Skript > Astronomie > ImageSolver`
 > Wurden inkompatible Prozesse angewendet (Stretch, Dekonvolution, BlurXTerminator),
 > erscheint nach „Photometrie starten" eine rote Warnung.
 
-### 4. Skript ausführen
+### 3. Skript ausführen
 
 - **Schnellstart (ohne Menüeintrag):** `Skript > Skriptdatei ausführen …` → `aavso-photometry.js` auswählen
 - **Mit Menüeintrag:** `Skript > Feature Scripts … > Hinzufügen` einmalig auf den Skriptordner anwenden.
-  PixInsight registriert das Skript unter `Skript > BeSchne > Photometry` und lädt
+  PixInsight registriert das Skript unter `Skript > BeSchne > AAVSO Photometry` und lädt
   Codeänderungen bei jedem weiteren Start automatisch neu.
 
-### 5. Die sechs Schritte des Assistenten durchlaufen
+### 4. Die sechs Schritte des Assistenten durchlaufen
 
 **Schritt 1 — Setup**
 
 | Feld | Was tun |
 |------|---------|
 | **Aktives Bild** | Prüfen, ob der eigene Stack angezeigt wird |
-| **Vergleichs-CSV** | Zur heruntergeladenen CSV aus Schritt 2 navigieren |
+| **Bildfeld** | Nur Anzeige: Gesichtsfeld des Bildes aus dem Plate-Solve |
+| **Objekt** | AAVSO-(VSX-)Name des Ziels, z. B. `T CrB` oder `RS Oph` (wird gespeichert) |
+| **Comp mag limit** | Schwächste herunterzuladende Vergleichssterne (Standard 14,5, wird gespeichert). Für helle Ziele verringern |
+| **Koordinaten** | Nur wenn AAVSO den Namen nicht kennt: ankreuzen und RA (`HH:MM:SS` oder Grad) und Dec eingeben. Wird automatisch angekreuzt, wenn die Namenssuche fehlschlägt |
 | **Beobachtercode** | Den eigenen AAVSO-Beobachtercode eingeben |
 
 **Schritt 2 — Vergleichssterne**
 
-Das Skript führt einen PSF-Entdeckungsdurchlauf für alle feldintern sichtbaren V-Band-Sterne
-durch und zeigt sie in einer Tabelle mit V-Helligkeit, Δmag zum Ziel und PSF-Qualität.
-Sterne, die Qualitätsprüfungen bestehen und innerhalb von 2 Größenklassen des Ziels liegen,
-werden automatisch für das Ensemble ausgewählt. Auf eine Zeile klicken, um sie ein- oder
+Beim Öffnen dieses Schritts lädt das Skript die Vergleichssterne und vermisst sie. Die
+Statuszeile zeigt jede Stufe:
+
+1. Objekt bei AAVSO nachschlagen — liefert die Koordinaten des Ziels
+2. Vergleichssterne herunterladen — die Karte wird aus dem Plate-Solve so bemessen,
+   dass sie das ganze Bild um das Ziel abdeckt
+3. Aufsuchkarte als Bild herunterladen (Abbruch nach 20 s; optional)
+4. PSF-Fits von Ziel und allen Vergleichssternen im Bild
+
+Die Kandidaten erscheinen in einer Tabelle mit V-Helligkeit, Δmag zum Ziel und
+PSF-Qualität. Δmag bezieht sich auf eine vorläufige Helligkeitsschätzung des Ziels in
+diesem Bild — eine Katalog-Helligkeit des Ziels ist nicht nötig. Sterne, die die
+Qualitätsprüfungen bestehen und innerhalb von 2 Größenklassen des Ziels liegen, werden
+automatisch für das Ensemble ausgewählt. Auf eine Zeile klicken, um sie ein- oder
 auszuschalten. Den **Prüfstern** aus dem Dropdown am unteren Rand wählen.
+
+Der Download wird wiederverwendet, solange Bild, Objekt, Koordinaten und Grenzhelligkeit
+gleich bleiben — Hin- und Herwechseln zwischen den Schritten wiederholt ihn nicht.
 
 **Schritt 3 — Photometrie**
 
@@ -149,7 +142,14 @@ Der Bericht wird automatisch beim Öffnen dieses Schritts erzeugt.
 Für die AAVSO-Einreichung **AAVSO Extended Format** wählen, dann **Exportieren …** klicken
 und mit Endung `.txt` speichern.
 
-### 8. Bericht bei AAVSO einreichen
+Mit angekreuztem **Also save comparison stars and finder chart** (Standard, wird
+gespeichert) schreibt der Export zusätzlich `<Karten-ID>.csv` — die verwendeten
+Vergleichssterne — und `<Karten-ID>.png` (die Aufsuchkarte, falls sie geladen werden
+konnte) in den Ordner des Berichts. Bereits vorhandene Dateien bleiben erhalten. AAVSO
+überarbeitet Sequenzen mit der Zeit; so bleibt genau dokumentiert, worauf sich das
+Feld `CHART` des Berichts bezieht.
+
+### 5. Bericht bei AAVSO einreichen
 
 1. Das Formular [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/) aufrufen und einloggen
 2. Im ersten Feld **File upload** auswählen (nicht Manual)
@@ -163,9 +163,9 @@ und mit Endung `.txt` speichern.
 
 T CrB erwartet man um ~8 Größenklassen heller — von Ruhelage (~10 V) bis Nova-Maximum (~2 V).
 
-Detaillierte Ausrüstungs- und Kartenempfehlungen — welche Vergleichssterne bei welcher
-Helligkeit in welches Bildfeld passen und welche CSV-Karte in jeder Phase zu laden ist —
-finden sich in [docs/outburst-strategy.de.md](docs/outburst-strategy.de.md).
+Detaillierte Ausrüstungsempfehlungen — welche Vergleichssterne bei welcher Helligkeit in
+welches Bildfeld passen und welche Grenzhelligkeit in jeder Phase sinnvoll ist — finden
+sich in [docs/outburst-strategy.de.md](docs/outburst-strategy.de.md).
 
 ### Warum TB für die Ausbruchserkennung am wichtigsten ist
 
@@ -190,29 +190,24 @@ TR wird daher nicht gemessen: In Ruhelage dominiert der rote Kanal überwältige
 M-Riesen-Photosphäre; der WD/Scheiben-Beitrag ist ein kleiner Bruchteil des gesamten
 Rc-Flusses, was TR zum unempfindlichsten Band für die Erkennung von Nova-Vorläufern macht.
 
-### Phase 1 — Frühe Aufhellung (~7–9 mag): Comp/Check wechseln
+### Phase 1 — Frühe Aufhellung (~7–9 mag): nichts zu ändern
 
-Karte **X42597QE** enthält hellere Vergleichssterne für diese Phase:
+Das Comp-Ensemble wird relativ zur *im Bild gemessenen* Helligkeit des Ziels vorausgewählt.
+Hellere Vergleichssterne (bei T CrB z. B. die Labels `84` mit 8,4 V und `79` mit 7,9 V)
+werden daher automatisch gewählt, wenn T CrB aufhellt. Die Auswahl im Schritt
+**Vergleichssterne** prüfen und bei Bedarf anpassen.
 
-| Label | AUID | V-Mag | Einsatz wenn T CrB |
-|-------|------|-------|---------------------|
-| `98`  | `000-BBW-796` | 9,809 | Ruhelage (~10 V) |
-| `106` | `000-BJS-901` | 10,554 | Ruhelage (Prüfstern) |
-| `84`  | `000-BBW-888` | 8,361 | Aufhellung, ~7–9 mag |
-| `79`  | `000-BBW-881` | 7,886 | Aufhellung, ~7–9 mag |
-
-Im **Schritt 2 — Vergleichssterne** die Auswahl entsprechend anpassen.
-Das Skript schlägt automatisch die hellsten qualitativ geeigneten Sterne vor.
-
-### Phase 2 — Nova-Maximum (~2–6 mag): neue VSP-Karte laden
+### Phase 2 — Nova-Maximum (~2–6 mag): Comp mag limit verringern
 
 Am Maximum sättigt T CrB bei normalen Belichtungszeiten. Dann sind sehr kurze Subframes
-(unter einer Sekunde) erforderlich. Die schwachen Vergleichssterne aus X42597QE
-sind dann möglicherweise nicht mehr erfassbar.
+(unter einer Sekunde) erforderlich, und schwache Vergleichssterne sind möglicherweise
+nicht mehr erfassbar.
 
-1. `python3 tools/fetch-vsp.py --fov 180 --maglimit 6` ausführen — neue CSV mit helleren Comp-Sternen; die Karten-ID wird auf der Konsole ausgegeben
-2. Über **Durchsuchen** laden und passende Comp/Check-Labels eingeben
-3. Konstante `CHART` im Skript (Zeile ~40) auf die neue Karten-ID aktualisieren
+1. **Comp mag limit** im Setup auf etwa 2–3 Größenklassen schwächer als die erwartete
+   Zielhelligkeit setzen (z. B. `8` für ein Ziel mit 5 mag)
+2. Mit einer Grenze von **12 oder heller** erlaubt AAVSO VSP Karten über 180′ (im Skript
+   bis 1200′) — Weitfeld-Instrumente erhalten so Vergleichssterne im ganzen Bild
+3. Die Karten-ID der neuen Sequenz landet automatisch im Bericht
 
 AAVSO gibt bei Ausbruchsbeginn _Alert Notices_ mit konkreten Karten- und
 Belichtungsempfehlungen heraus — [aavso.org/news](https://www.aavso.org/news) beobachten.
@@ -238,6 +233,16 @@ Farbindex im Vergleich zu Standardphotometrie.
 Weitwinkelinstrument, visuelle Beobachtung oder Ensemble-Photometrie mit schwächeren
 feldinternen Sternen.
 
+**AAVSO-VSP-Kartengröße und Grenzhelligkeit.** VSP erlaubt Karten über 180′ nur mit
+einer Grenzhelligkeit von 12 oder heller. Bei einer schwächeren Grenze (Standard 14,5)
+fordert das Skript eine 180′-Karte an und warnt auf der Konsole, dass Vergleichssterne
+in den Bildecken fehlen — bei einem weiten Feld wie dem 4,3° × 2,4° des Seestar die
+Grenze auf 12 setzen, um das ganze Bild abzudecken.
+
+**Internetverbindung erforderlich.** Die Vergleichssterne werden zur Laufzeit geladen;
+einen Offline-Modus gibt es nicht. Das Bild der Aufsuchkarte ist optional: Antwortet der
+VSP-Bildserver nicht innerhalb von 20 s, gibt die Konsole stattdessen die URL der Karte aus.
+
 **DATE-OBS bei gestackten Mastern unzuverlässig.** PixInsights `ImageIntegration`
 schreibt `DATE-OBS` als Mittelpunkt der Sub-Startzeiten ohne Belichtungsdauer.
 Immer die **Referenz-Schaltflächen** in der Zeitsektion verwenden, um Start und Ende
@@ -252,10 +257,13 @@ aus echten Subframes zu setzen.
 | *Kein aktives Bildfenster* | Kein Stack geöffnet oder nicht aktiv | Master-Stack öffnen und Titelleiste anklicken |
 | *Kein Plate-Solve* | Keine WCS-Lösung gefunden | `Skript > Astronomie > ImageSolver` auf den Stack anwenden |
 | *Debayertes OSC-RGB-Bild erwartet …* | Bild ist Graustufen, Kanalextraktion oder un-debayerter Bayer-Raw | Zuerst den Debayer-Prozess in PixInsight anwenden, dann den vollständigen debayerten RGB-Master verwenden |
-| *Stern außerhalb des Bildfeldes* | Comp- oder Check-Stern-Label nicht im Sichtfeld | Anderes Label im Dropdown wählen |
+| *AAVSO VSP: Star … does not exist in VSX* | AAVSO kennt den Objektnamen nicht | Schreibweise prüfen (z. B. `T CrB`) oder Koordinaten eingeben (**Koordinaten** wird automatisch angekreuzt) |
+| *AAVSO VSP request failed* | Keine Internetverbindung oder AAVSO nicht erreichbar | Verbindung prüfen und erneut versuchen; die Konsole zeigt die Anfrage-URL |
+| *Comp mag limit must be a V magnitude* | Grenzhelligkeit leer oder ungültig | Eine Zahl eingeben, z. B. `14.5` |
+| *… is outside the image frame* | Das Ziel ist nicht in diesem Bild | Objektname / Koordinaten und Plate-Solve prüfen |
+| *No comparison star with a usable PSF* | Alle Vergleichssterne im Bild fielen durch die PSF-Prüfung | Grenzhelligkeit anpassen; Fokus, Sättigung und Plate-Solve prüfen |
 | *PSF abgelehnt — zu schwach* | Stern zu schwach für Gauß-Fit | Helleres Comp/Check-Label wählen |
 | *PSF abgelehnt — gesättigt* | Stern im Master beschnitten | Schwächeres Comp/Check-Label wählen oder Belichtung kürzen |
-| *Keine verwendbaren V-Band-Zeilen* | Falsche CSV oder Spaltenformat abweichend | Erneut aus AAVSO VSP exportieren und CSV-Spalten prüfen |
 | Rote Warnung: *verbotener Prozess erkannt* | Stack wurde gestretcht oder dekonvolviert | Stack aus kalibrierten Subs ohne Stretch/Schärfung neu erstellen |
 | Orange Warnung: *Prüfstern-Abweichung > 3×MERR* | Möglicher systematischer Fehler | Verifikations-Thumbnail auf falschen Stern oder Blending prüfen; Atmosphäre begutachten |
 
@@ -269,7 +277,8 @@ aus echten Subframes zu setzen.
 Formular [AAVSO Submit Photometric Observations](https://apps.aavso.org/v2/data/submit/photometry/)
 (**File upload** auswählen). Der Bericht enthält **eine Beobachtungszeile pro gemessenem Band**
 (`FILT=TG` und `FILT=TB`) mit gemeinsamem Datum, Luftmasse und Karten-ID. Schlüsselwerte:
-`TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`, `CHART=X42597QE`.
+`TRANS=NO`, `MTYPE=STD`, `OBSTYPE=CCD`; `NAME` ist der Sternname, wie AAVSO ihn liefert
+(z. B. `T CrB`), und `CHART` die Karten-ID der geladenen Sequenz (z. B. `X43358CRK`).
 
 ---
 
@@ -301,16 +310,14 @@ Installation:
 
 ```
 aavso-photometry.js          Hauptskript
-sample_comparison_stars.csv  Formatbeispiel für die Vergleichsstern-CSV
 docs/
   Photometry.html            Native PixInsight-Hilfeseite (in PI-Dokumentationsbaum installieren)
   aavso-extended-format.md   AAVSO Extended File Format Feldbeschreibung
   domain-knowledge.md        Photometrie-Konstanten und wissenschaftliche Hinweise
-charts/
-  X42597QE.csv               AAVSO-VSP-Export für Karte X42597QE
-  X42597QE.png               AAVSO-Aufsuchkarte für T CrB (und weitere Karten)
+  outburst-strategy.de.md    T-CrB-Ausbruch: Ausrüstungsempfehlungen (auch .md)
   time-handling.md           Spezifikation der Belichtungsmittelzeit
   pjsr-api-notes.md          Verifizierte PJSR-API-Muster und Fallstricke
+  plan-generic-target.md     Plan v2.0: beliebiges Ziel, automatische Vergleichssterne
 screenshots/                 Dialog-Screenshots (alle Versionen)
 CLAUDE.md                    Hinweise für KI-Coding-Assistenten
 TODO.md                      Aufgabenliste und Roadmap
@@ -322,8 +329,8 @@ TODO.md                      Aufgabenliste und Roadmap
 
 - ~~Ensemble-Photometrie~~ — erledigt (v1.2.0)
 - ~~Mehrband TG + TB~~ — erledigt (v1.3.0)
+- ~~Frei wählbarer Zielstern, automatische Vergleichssterne aus AAVSO VSP~~ — erledigt (v2.0.0)
 - TG→V-Farbtransformation (`TRANS=YES`)
-- Frei wählbarer Zielstern
 
 ---
 

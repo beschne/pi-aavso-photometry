@@ -1,12 +1,12 @@
 # aavso-photometry.js — Build Checklist
 
 ## 1. Script skeleton
-- [x] Feature header (`#feature-id BeSchne > Photometry`, `#feature-info`, optional `#feature-icon`)
+- [x] Feature header (`#feature-id BeSchne > AAVSO Photometry`, `#feature-info`, optional `#feature-icon`)
 - [x] Top constants block: T CrB position, observer site, default comp/check labels, `SATURATION_FRACTION`, AAVSO metadata (`OBSCODE`, `CHART`, …)
 - [x] `main()` entry point with top-level error handling
 - [x] Console banner (script name + version)
 
-## 2. CSV parser
+## 2. CSV parser — superseded in v2.0.0 by the AAVSO VSP download (see Roadmap)
 - [x] Read comparison-star CSV from persisted path (`BeSchne/Photometry/comparisonCsvPath`)
 - [x] Re-prompt via `OpenFileDialog` if path missing or file not found; persist new choice
 - [x] RFC 4180-compliant parser (handles quoted fields with embedded `""`)
@@ -91,24 +91,6 @@ See `SECURITY_AUDIT.md` (gitignored).
 - [x] **Verification image stretch controls.** No Stretch / Auto / Boosted radio buttons embedded in the Verification step; re-render on change without leaving the dialog.
 - [x] **Ensemble photometry (`CNAME=ENSEMBLE`).** Six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars step runs a single DynamicPSF discovery pass on all in-frame V-band candidates; TreeBox shows V mag, Δmag, PSF quality, recommended flag. Default selection: up to 6 stars with Δmag ≤ 2.0 and good PSF. ZP = mean(magV_i − instMag_i); MERR = √(σ_ZP² + σ_T²). Report: `CNAME=ENSEMBLE`, `CMAG=na`, comp labels in NOTES. Single-comp case (N=1) identical to previous format. End-to-end tested with T CrB submission to AAVSO.
 - [x] **Multiband TB/TG** (blue channel)
-- [ ] **FOV-aware comparison star CSV.** Different instruments need different AAVSO VSP charts and CSVs. See details below. **Blocked** on AAVSO VSP API restoration (v2 migration incomplete); in the meantime pre-fetched CSVs for 60–900′ are in `charts/`.
-- [ ] User-specifiable **target star**
+- [x] **FOV-aware comparison stars + user-specifiable target star** (v2.0.0-dev). Object name in Setup; coordinates and comparison sequence downloaded from the AAVSO VSP chart API; chart sized from the plate solution; `CHART` from the VSP chart ID; optional CSV/PNG saved with the exported report. Plan and verified API facts: `docs/plan-generic-target.md`. Tested in PixInsight against v1.4.0 on a T CrB master (identical magnitudes and comps).
+- [ ] **v2.0.0 release** — remaining items from `docs/plan-generic-target.md`: test a second target and the manual-coordinates path in PixInsight, new Setup/Comp Stars screenshots, security audit, then `2.0.0-rc.1`.
 - [ ] **TG→V** transformation (`TRANS=YES`)
-
----
-
-## FOV-aware comparison star CSV — details
-
-The Seestar S30 Pro has a ~4.3° × 2.4° FOV. At quiescence (T CrB ≈ 10 V) this is fine: the 1° AAVSO VSP chart X42597QE contains enough ~10 V comparison stars. During outburst T CrB reaches ~2 V, so all useful comparison stars (2–6 V) lie far outside a 1° field. A wider-FOV instrument needs a correspondingly larger VSP chart and a new CSV download.
-
-Photometric star charts and the corresponding photometric comparison star tables (CSV) are fetched from the **AAVSO Variable Star Plotter (VSP):** https://www.aavso.org/apps/vsp/
-
-**VSP gotcha:** if a chart ID is pre-filled in the "Chart ID" field, the VSP ignores the FOV selector and always returns that chart. **Clear the Chart ID field explicitly** before changing the FOV, then hit Plot Chart to generate a new chart at the desired scale.
-
-**What the script needs to support:**
-- The CSV path is already user-selectable and persisted. No structural change required for basic multi-instrument use — the user simply browses to the new file.
-- The `CHART` constant in the report header (`X42597QE`) is hardcoded and must be updated to match the new chart. Currently this requires editing the script.
-- Optionally: read the chart ID from the CSV filename or a header field and write it into `CHART` automatically, removing the need to edit the source.
-- **FOV readout from plate solution:** the WCS solution already in the active image contains everything needed to compute the image FOV. Display it in the Setup step so the user knows exactly what to enter in the AAVSO VSP "Field of view" field when downloading a new chart and CSV for a different instrument. This also makes the script instrument-agnostic — any plate-solved image from any telescope works without manual configuration.
-
-**Trigger for this work:** T CrB outburst is imminent. Have a wider-FOV CSV ready and know the workflow before it erupts.

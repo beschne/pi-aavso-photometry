@@ -23,7 +23,7 @@ Authoritative spec: <https://www.aavso.org/aavso-extended-file-format> — verif
 
 | Field | Our value | Notes |
 |-------|-----------|-------|
-| `NAME` | `T CRB` | |
+| `NAME` | e.g. `T CrB` | Star name as returned by AAVSO VSP (`<star>`); the typed name when manual coordinates are used |
 | `DATE` | computed JD | Mid-exposure JD — see `time-handling.md` |
 | `MAG` | computed | T CrB standardised magnitude |
 | `MERR` | computed | 1-sigma magnitude error — see `domain-knowledge.md` for formula |
@@ -36,7 +36,7 @@ Authoritative spec: <https://www.aavso.org/aavso-extended-file-format> — verif
 | `KMAG` | instrumental, or standardised for ensembles | Check star's raw instrumental magnitude for a single comp star; **ensemble-standardised** (ZP + instrumental) when `CNAME=ENSEMBLE` — see below |
 | `AMASS` | computed | Airmass at mid-exposure — see `domain-knowledge.md` |
 | `GROUP` | `na` | |
-| `CHART` | `X42597QE` | |
+| `CHART` | e.g. `X43358CRK` | Chart ID of the comparison sequence downloaded from AAVSO VSP for this run |
 | `NOTES` | short text | Keep well under ~100 chars |
 
 ## `MTYPE=STD` vs `DIF`

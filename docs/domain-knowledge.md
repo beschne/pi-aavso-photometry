@@ -1,12 +1,14 @@
 # Domain Knowledge Reference
 
-## Target: T Coronae Borealis ("Blaze Star")
+## Target
 
-**Catalog position (J2000, hardcoded constant):**
-- RA = 239.8757° (15h 59m 30.2s)
-- Dec = +25.9202° (+25° 55′ 13″)
+Since v2.0.0 the target is entered by name; its J2000 position comes from the AAVSO
+VSP response (VSX name resolution), or from manual RA/Dec in Setup. Nothing is
+hardcoded.
 
-Keep in the top constants block, factored for extensibility to other targets.
+**T Coronae Borealis ("Blaze Star")**, the target the script was developed for:
+- RA = 239.8757° (15h 59m 30.2s), Dec = +25.9202° (+25° 55′ 13″) — matches VSP
+  (`000-BBW-825`, `15:59:30.16 25:55:12.6`)
 
 ## Observer site
 
@@ -33,13 +35,20 @@ The VSP issues two different IDs for the same observation field:
 | `X42615BSV` | V = visual finder chart | Print and use at the eyepiece |
 | `X42615BSX` | X = extended photometry sequence | Put in the AAVSO `CHART` report field |
 
-CCD/OSC observers must cite the **chart ID** from the photometry sequence (X suffix) in the `CHART` report field, not the finder chart ID. The VSP photometry table page states it explicitly: *"Report this sequence as X42597QE in the chart field."* That value is the chart ID — used as both the CSV filename (e.g. `charts/X42597QE.csv`) and the AAVSO `CHART` field. The sequence covers stars within half the plotted FoV radius — a 7.5° chart gives a 3.75° sequence.
+CCD/OSC observers must cite the **chart ID** from the photometry sequence in the `CHART` report field, not the finder chart ID. The VSP photometry table page states it explicitly: *"Report this sequence as X42597QE in the chart field."* The chart API returns this ID as `<chartid>`; the script writes it into `CHART` and names the saved `<chartId>.csv` after it. Identical requests (target, fov, maglimit) return the same ID.
 
-## Comparison-star CSV (AAVSO VSP export)
+**Coverage:** the sequence covers the whole square chart of side `fov`, centred on the target (a 60′ request returned stars up to 39.4′ from T CrB ≈ 30′·√2). An earlier note here said "half the plotted FoV radius" — that was wrong.
 
-**Files:**
-- `charts/X42597QE.csv` — reference copy of the AAVSO VSP export for chart X42597QE
-- `sample_comparison_stars.csv` — format sample (root of repo)
+**Size limit:** charts larger than 180′ are only allowed with `maglimit` ≤ 12.
+
+## Comparison stars (AAVSO VSP chart API)
+
+Downloaded at run time: `https://apps.aavso.org/vsp/api/chart/?star=<name>&fov=<arcmin>&maglimit=<mag>&format=xml`
+(or `ra=`/`dec=` in decimal degrees instead of `star=`). Details: `plan-generic-target.md`.
+The response lists each star once with all bands (`V`, `B`, `Rc`, `Ic`, `J`, `H`, `K`).
+
+**Saved CSV** (`<chartId>.csv`, written next to the exported report) — same layout as
+the former VSP photometry-table export:
 
 **Columns:** `AUID,RA,Dec,Label,Band,Mag,Error,Comments`
 
@@ -54,13 +63,9 @@ CCD/OSC observers must cite the **chart ID** from the photometry sequence (X suf
 | `Error` | float | Magnitude uncertainty |
 | `Comments` | string | Blend warnings, notes; may be RFC 4180 quoted with escaped `""` |
 
-**Critical:** one row per star **per band** → filter to `Band == "V"` before use (V magnitudes are the reference for TG differential photometry).
+One row per star **per band**; the script writes V and B rows (V is the reference for TG, B for TB). The `Comments` field is RFC 4180 quoted when needed, with embedded double-quotes escaped as `""` — e.g. label 102: `"Combined magnitude of a 10.21 and 13.75 Vmag. pair 8"" apart. ..."`.
 
-**CSV quoting:** the `Comments` field may be RFC 4180 quoted, with embedded double-quotes escaped as `""`. Example from label 102: `"Combined magnitude of a 10.21 and 13.75 Vmag. pair 8"" apart. ..."`. Use a proper CSV parser, not a naive `split(",")`.
-
-**Blend warning:** label `102` (AUID `000-BBW-779`) on chart X42597QE is a blended pair: combined V = 10.167; individual stars 10.21 + 13.75 mag, 8″ apart. Unsuitable for PSF fitting. Parse `Comments` for blend flags and exclude flagged stars.
-
-**Column mismatch:** fail loudly — do not silently skip rows.
+**Blend warning:** label `102` (AUID `000-BBW-779`) near T CrB is a blended pair: combined V = 10.167; individual stars 10.21 + 13.75 mag, 8″ apart. Unsuitable for PSF fitting. The script excludes stars whose comments match blend/pair/combined.
 
 ## DATE-OBS caveat
 
@@ -85,34 +90,29 @@ Caveat: true saturation is a subframe property; on the master this is only a heu
 
 T CrB is expected to brighten by ~8 magnitudes from quiescence (~10 V) to nova peak (~2 V). The script handles this in two stages:
 
-### Stage 1 — Early brightening (~7–9 mag): change comp/check labels in the dialog
+### Stage 1 — Early brightening (~7–9 mag): automatic
 
-The current chart **X42597QE** already contains brighter comp stars:
+The comp ensemble is pre-selected within 2 mag of the target's brightness *estimated in the image* (median zero-point of all good comps), so brighter comps near T CrB are picked up as it brightens:
 
-| Label | AUID | V mag | Use when T CrB is |
-|-------|------|-------|-------------------|
-| `98`  | `000-BBW-796` | 9.809 | Quiescence (~10 V) — default |
-| `106` | `000-BJS-901` | 10.554 | Quiescence — default check |
+| Label | AUID | V mag | Suits T CrB at |
+|-------|------|-------|----------------|
+| `98`  | `000-BBW-796` | 9.809 | Quiescence (~10 V) |
+| `106` | `000-BJS-901` | 10.554 | Quiescence |
 | `84`  | `000-BBW-888` | 8.361 | Brightening, ~7–9 mag |
 | `79`  | `000-BBW-881` | 7.886 | Brightening, ~7–9 mag |
 
-Switch comp and check labels in the **Comp label / Check label** dialog fields before clicking Run Photometry. The selection persists between sessions via Settings.
+Check the selection in the Comp Stars step; ticks can be changed per run.
 
-### Stage 2 — Nova peak (~2–6 mag): download a new VSP chart
+### Stage 2 — Nova peak (~2–6 mag): lower the Comp mag limit
 
-At peak brightness the faint comp stars in X42597QE are still measurable — the problem is T CrB itself will saturate at any normal exposure. You will be shooting very short sub-second exposures, and comp stars fainter than ~5 mag may be undetectable in those frames.
+T CrB will saturate at any normal exposure; you will be shooting very short sub-second exposures, and comp stars fainter than ~5 mag may be undetectable in those frames.
 
-**What to do:**
-1. Go to the **AAVSO Variable Star Plotter** (VSP) at `aavso.org/vsp`.
-2. Enter `T CrB`, set field of view to 180′ or wider, and set magnitude limit to ~5 or 6.
-3. Download the **Photometry Table** as CSV — it is the same column format the script already reads.
-4. Load the new CSV in the script via the Browse button; enter suitable comp/check labels from the new chart.
-5. Update the `CHART` constant in the script to match the new chart ID shown in the VSP output.
+**What to do:** set **Comp mag limit** in Setup to ~2–3 mag fainter than the target (e.g. 8). With a limit ≤ 12 VSP allows charts wider than 180′, so the script requests a chart covering the whole frame (up to 1200′). The new chart ID goes into the report automatically.
 
 **The Seestar FOV constraint:** the Seestar S30 Pro has a ~4.3° × 2.4° FOV. At 2 mag, suitable comp stars (1–4 mag) may not exist within that window — the nearest bright Corona Borealis star, Alphecca (α CrB, 2.22 V), is ~4° away. If no adequate comp falls in frame, consider:
 - Using a wider-field setup for the nova peak
 - Visual observation — AAVSO actively solicits visual reports for bright novae
-- Ensemble photometry of several fainter in-frame stars with `CNAME=ENSEMBLE` (future feature)
+- Ensemble photometry of several fainter in-frame stars with `CNAME=ENSEMBLE` (implemented in v1.2.0)
 
 **AAVSO alert notices:** when T CrB enters outburst AAVSO will issue Alert Notices with specific chart recommendations and exposure guidance. Monitor `aavso.org/news` and the T CrB campaign page.
 

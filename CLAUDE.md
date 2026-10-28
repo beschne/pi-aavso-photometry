@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project does
 
-A **native PixInsight PJSR script** that performs differential photometry of the
-recurrent nova T Coronae Borealis ("Blaze Star") directly inside PixInsight, on an
-open plate-solved OSC stack, and writes an **AAVSO Extended File Format** report.
+A **native PixInsight PJSR script** that performs differential photometry of a
+variable star directly inside PixInsight, on an open plate-solved OSC stack, and
+writes an **AAVSO Extended File Format** report. The user enters only the target's
+AAVSO name; coordinates and comparison stars are downloaded from the AAVSO Variable
+Star Plotter (VSP). Developed for the recurrent nova T Coronae Borealis ("Blaze Star").
 
 The script performs the same science inside PixInsight directly, reusing its own
 facilities (astrometric solution, FITS keywords, DynamicPSF) rather than re-implementing
@@ -22,25 +24,27 @@ them externally.
   features are available; do not assume SpiderMonkey 24 limitations or quirks.
 - No external dependencies of any kind. If a capability seems to need one, it almost
   certainly already exists as a native PixInsight process or bundled JS library —
-  use that.
+  use that. (HTTP: `NetworkTransfer`; XML: `XMLDocument` — see `docs/pjsr-api-notes.md`.)
+- **Never write `//` inside a regex literal** (e.g. `/^https:\/\/x\//`): the PJSR
+  preprocessor strips `//` to end of line before V8 parses the file, even inside a
+  regex, and the script fails to load with "Invalid regular expression". Use string
+  methods (`indexOf`) instead. `//` inside ordinary string literals is safe.
 
 ## Naming conventions
 
-- **GitHub repository:** `pi-photometry`. Future PixInsight scripts get their own `pi-…` repos.
-- **PixInsight menu category:** `BeSchne` (for Benno Schneider). Feature header: `#feature-id BeSchne > Photometry`.
+- **GitHub repository:** `beschne/pi-aavso-photometry`. Future PixInsight scripts get their own `pi-…` repos.
+- **PixInsight menu category:** `BeSchne` (for Benno Schneider). Feature header: `#feature-id BeSchne > AAVSO Photometry`.
 - **File name:** `aavso-photometry.js` — lower-case, hyphenated, not target-specific.
-- **Settings namespace:** `BeSchne/<Script>/<key>`, e.g. `BeSchne/Photometry/comparisonCsvPath`.
+- **Settings namespace:** `BeSchne/<Script>/<key>`, e.g. `BeSchne/Photometry/objectName`.
 - **Human-facing strings** (TITLE/VERSION constants, dialog title): "AAVSO Photometry".
 
 ## Scripts
 
 | File | Purpose |
 | ---- | ------- |
-| `aavso-photometry.js` | The script. Runs on the active image window; locates T CrB via the plate solve; measures it against CSV comparison stars; writes an AAVSO Extended report. |
-| `sample_comparison_stars.csv` | Format sample for the comparison-star CSV (two stars, multiple bands). |
+| `aavso-photometry.js` | The script. Runs on the active image window; resolves the target and downloads its comparison stars from AAVSO VSP; measures the target against them via the plate solve; writes an AAVSO Extended report. |
 | `docs/Photometry.html` | Native PixInsight help page — see **PixInsight documentation** below for install instructions. |
-| `charts/X42597QE.csv` | Reference copy of the AAVSO VSP export for chart X42597QE. |
-| `charts/X42597QE.png` | AAVSO finder chart for T CrB, chart X42597QE. |
+| `docs/plan-generic-target.md` | v2.0 plan and verified facts about the VSP chart API. |
 | `screenshots/` | Dialog screenshots for all versions, used in the READMEs and PI docs. |
 
 ## Running and development
@@ -135,8 +139,8 @@ These are enforced by the dialog's notice text and must be respected in all code
 1. **Input:** `ImageWindow.activeWindow` — plate-solved, debayered OSC RGB master light. Abort clearly if unsuitable.
 2. **Channels:** green (PixInsight R,G,B → index 1) for **TG** band; blue (index 2) for **TB** band. Both are measured per run via separate `fitPSF(window, stars, channel)` calls. The `channel` parameter is the only difference between the two passes.
 3. **Astrometry:** PixInsight's own WCS/astrometric-metadata library (`ImageSolver` / `AnnotateImage`). Do **not** hand-roll gnomonic projection.
-4. **Target location:** T CrB catalog position hardcoded → project to pixels via the plate solve.
-5. **Comparison stars:** read from a user-chosen CSV (path persisted via `Settings`); project each in-frame star to pixels. Both V-band and B-band rows are loaded; each star object carries `magV`/`magB` (null when absent).
+4. **Target location:** `resolveSequence()` (Comp Stars step) makes a small VSP chart request by object name (`fov=30`, `maglimit=5`) only to get the target's J2000 position — VSP returns it as root-level `auid`/`ra`/`dec` in the XML. Fallback: manual RA/Dec fields in Setup (ticked automatically when VSX does not know the name), then all requests go by position. The position is projected to pixels via the plate solve. `TARGET` is filled at run time.
+5. **Comparison stars:** a second VSP request (`https://apps.aavso.org/vsp/api/chart/?…&format=xml`, via `NetworkTransfer`, parsed with `XMLDocument`) with a chart size computed from the plate solution — twice the largest target-to-corner distance + 10 %, clamped to 180′ if maglimit > 12 (VSP rule), else 1200′. Each star object carries `magV`/`magB` (B directly from VSP; null when absent). The chart ID becomes the report's `CHART`. The sequence is cached for the dialog session while image, name, coordinates and maglimit are unchanged. The finder-chart PNG is downloaded into memory (20 s limit; optional). On Export, with the "Also save comparison stars and finder chart" checkbox, `<chartId>.csv` and `<chartId>.png` are written into the report's folder (existing files kept).
 6. **Measurement:** PSF fit via native **DynamicPSF**; read amplitude / background / sigma / flux. Apply quality filters (too faint, saturated/clipped, centroid drift) — see `docs/domain-knowledge.md`.
 7. **Photometry (current scope):** ensemble comp stars (N selectable in Comp Stars step) + single check star. For each band independently: ZP = mean(magBand_i − instMag_i); mag(T) = ZP + instMag_T. `MERR` = √(σ_ZP² + σ_T²) where σ_ZP = std(ZP_i)/√N for N≥2 (see `docs/domain-knowledge.md`). The check star gate applies to TG (compares derived mag against catalogue V; >3×MERR → orange warning).
 8. **Time confirmation (UI):** time fields (Start / End / Mid) are in the Mid-time step of `PhotometryDialog` — see `docs/time-handling.md` and **Dialog layout** below. Confirmed mid-time JD drives the AAVSO `DATE` field and airmass.
@@ -154,7 +158,7 @@ work. If splitting is ever warranted, the natural seams are:
 
 | Candidate file | Contents |
 |----------------|----------|
-| `lib/csv-parser.js` | RFC 4180 parser + `loadComparisonStars()` |
+| `lib/vsp.js` | AAVSO VSP chart API: `httpGet()`, `fetchVspSequence()`, `parseVspXml()`, CSV writer |
 | `lib/astrometry.js` | WCS projection, `projectToPixel()` |
 | `lib/psf.js` | `fitPSF()`, `psfInstrumentalMag()`, `psfMagError()`, `checkPSFQuality()` |
 | `lib/photometry.js` | Airmass, time/JD math, `readSiteCoords()` |
@@ -170,16 +174,16 @@ multi-file download friction for users.
 
 Full details: `docs/domain-knowledge.md`.
 
-- **T CrB position (hardcoded):** RA = 239.8757°, Dec = +25.9202° (15h59m30.2s, +25°55′13″)
+- **Target position:** from the VSP response at run time — no hardcoded targets. (T CrB: RA = 239.8757°, Dec = +25.9202°, matches VSP.)
 - **Observer site:** read from FITS keywords at run time (see below); **no hardcoded fallback**. `const SITE` has been removed.
 - **TG band:** green OSC channel; calibrated against V-band comp star magnitudes; runs ~0.1–0.3 mag brighter than V for red stars. **Never relabel TG as V.**
 - **TB band:** blue OSC channel; calibrated against B-band comp star magnitudes from the same CSV. B-band is most sensitive to the hot WD/disk component because the M3 III giant contributes minimally at B wavelengths (B−V ≈ +1.6 for M giants). TB is the most diagnostic band for early outburst detection. The colour index TB−TG approximates B−V; a sustained blueward shift is an early warning of increased accretion.
 - **TR (red channel): intentionally not implemented.** Rc flux at quiescence is overwhelmingly M-giant photospheric emission; the WD/disk contribution is a small fraction, making TR the least sensitive band for detecting accretion changes or nova onset. The Rc→TR colour correction for M stars is also large without transformation coefficients.
-- **Comparison CSV:** load both `Band == "V"` and `Band == "B"` rows; attach `magB`/`errorB` to each star object (null when absent). Prefer AUID over label in output; exclude blended stars (label 102 on chart X42597QE). CSV uses RFC 4180 quoting — use a proper parser, not `split(",")`. Fail loudly on column mismatch.
+- **Comparison stars:** from the VSP XML `photometry` list; V required, B attached when present. Prefer AUID over label in output; exclude blended stars (comments matching blend/pair/combined, e.g. label 102 near T CrB). The saved `<chartId>.csv` (`AUID,RA,Dec,Label,Band,Mag,Error,Comments`, RFC 4180 quoting) is a record of the run, never read back.
 - **DATE-OBS caveat:** ImageIntegration writes the midpoint of sub *start* times, ignoring exposure duration — unreliable. The acquisition-time dialog (see `docs/time-handling.md`) is the fix.
 - **Airmass:** Kasten & Young (1989) formula in pure JS — see `docs/domain-knowledge.md`. If lat or lon is absent, `AMASS=na` is written; this is valid per the AAVSO Extended File Format spec and is not treated as an error.
-- **Default comp/check:** the two stars whose V magnitude is closest to `TARGET.magQuiescence` (10.0 V for T CrB). Proximity minimises differential extinction and PSF fitting error contribution. Display order in the combos is brightest→faintest for easy browsing. Not persisted between sessions.
-- **Settings key:** `"BeSchne/Photometry/comparisonCsvPath"` — re-prompt if stored path no longer exists.
+- **Default comp ensemble:** stars within `ENSEMBLE_MAX_DELTA_MAG` (2.0) of a preliminary TG estimate of the target — `estimateTargetMag()`: median zero-point (magV − instMag) of all good-PSF comps applied to the target. No catalogue magnitude of the target is needed, and the selection follows the target as it brightens. Proximity minimises differential extinction and PSF fitting error contribution. Not persisted between sessions.
+- **Settings keys:** `objectName`, `compMagLimit`, `obsCode`, `lastExportDir`, `saveSequenceWithReport` under `BeSchne/Photometry/`.
 
 ## AAVSO Extended File Format
 
@@ -198,10 +202,10 @@ Full field spec and comp/check star table: `docs/aavso-extended-format.md`.
 **Per-observation fields:**
 `NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AMASS,GROUP,CHART,NOTES`
 
-Key choices: `TRANS=NO`, `MTYPE=STD` (not `DIF`), `OBSTYPE=CCD` (Seestar is a dedicated astronomy camera, not a consumer DSLR), `CHART=X42597QE`, `GROUP=na`.
+Key choices: `TRANS=NO`, `MTYPE=STD` (not `DIF`), `OBSTYPE=CCD` (Seestar is a dedicated astronomy camera, not a consumer DSLR), `CHART` = VSP chart ID of the downloaded sequence, `NAME` = star name as VSP returns it (`<star>`, e.g. `T CrB`; the typed name with manual coordinates), `GROUP=na`.
 The report contains **one observation line per measured band**: `FILT=TG` always; `FILT=TB` when the blue-channel PSF converges and at least one comp star has a B-band catalogue magnitude (all stars in a standard AAVSO VSP export do). `CMAG`/`KMAG` are **instrumental** magnitudes from the same channel as the observation line (can be negative) — **except** when `CNAME=ENSEMBLE`: then `CMAG=na` and `KMAG` is the check star's magnitude standardised the same way as the target (`ZP + instMag_check`), per AAVSO HQ guidance — see `docs/aavso-extended-format.md`. Output via `SaveFileDialog` on every run (not persisted).
 
-Default comp/check: the two stars closest in V magnitude to `TARGET.magQuiescence` (10.0 V). For chart X42597QE at quiescence this yields label `98` (9.809 V, Δ=0.19) and `106` (10.554 V, Δ=0.55).
+Default comp ensemble: see **Default comp ensemble** above. For T CrB at quiescence (v2.0.0-dev, 2026-10-28) it reproduced the v1.4.0 selection: comps 98+106+107+93+112+84, check 81.
 
 ## Time handling
 
@@ -234,7 +238,7 @@ Everything runs inside a single `PhotometryDialog` (class extending `Dialog`). T
 
 | Step | Panel | Contents |
 |------|-------|----------|
-| **0 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); CSV path + Browse; **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
+| **0 — Setup** | `setupPanel` | Title + version credit (bold); precondition labels (✓/✗/ℹ); active image name (read-only); image field size from the plate solution (read-only); **Object** name + **Comp mag limit** (both persisted); **Coordinates** CheckBox + RA/Dec edits (manual fallback); **Observer code** EditBox (default `BSLA`; persisted in Settings; written into `#OBSCODE` report header) |
 | **1 — Comp Stars** | `compStarsPanel` | TreeBox (5 cols: ✓, Label, AUID, V mag, Δmag, Quality) listing all in-frame V-band candidates; **Check** ComboBox at bottom; `updateCompCount()` label |
 | **2 — Photometry** | `runPanel` | TG magnitude + MERR; TB magnitude + MERR (shows — if blue PSF rejected or no B-band comp data available); TG PSF flux row (instrumental mags); `warningLbl` (red, forbidden processes); `linearityLbl` (yellow/orange, stretch heuristics); `checkGateLbl` (check-star deviation, TG only) |
 | **3 — Mid-time** | `midtimePanel` | First/last sub reference buttons; Start/End ISO + JD readouts; Frames (editable, auto-filled, + "Locate…" button to read exact count from a master XISF's processing history) / EXPTIME; mid-time RadioButtons (`= (S+E)/2` default, `= Start`, Manual + edit); mid-time JD + ISO readouts; Lat/Lon/Elev editable fields (pre-filled from FITS); airmass + moon readouts |
@@ -264,7 +268,7 @@ Keep code structured so these are additions, not rewrites. In priority order:
 - ~~**Ensemble photometry.**~~ Done (v1.2.0): six-step wizard (Setup → Comp Stars → Photometry → Mid-time → Verification → Report). Comp Stars TreeBox; single DynamicPSF discovery pass; ZP = mean(magV_i − instMag_i); `CNAME=ENSEMBLE`, `CMAG=na`; comp labels in NOTES. End-to-end tested with T CrB submission to AAVSO.
 
 - ~~**Multiband TB/TG**~~ Done (v1.3.0): blue channel (TB) measured simultaneously with TG via a second DynamicPSF pass; AAVSO report includes one observation line per band. Red channel (TR) is intentionally omitted — M-giant-dominated at quiescence, least diagnostic for outburst detection.
-- **User-specifiable target star.** Currently T CrB is hardcoded; isolate the target definition for easy extension.
+- ~~**User-specifiable target star.**~~ Done (v2.0.0-dev): object name + automatic VSP comparison sequence; see `docs/plan-generic-target.md`.
 
 - **(Low priority — scientific extensions)**
   - **TG→V transformation** (`TRANS=YES`) with once-derived coefficients.

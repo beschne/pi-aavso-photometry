@@ -4,14 +4,17 @@
 
 #feature-info  Differential photometry of variable stars directly inside \
                PixInsight. Requires a linear, plate-solved OSC RGB master \
-               stack and the AAVSO name of the target star. The comparison-star \
-               sequence and finder chart are downloaded from the AAVSO Variable \
-               Star Plotter (VSP). Fits PSFs via DynamicPSF (TG green + TB blue \
-               channels), derives the target magnitude from an ensemble of comp \
-               stars (or a single comp), checks quality against a check star, \
-               and writes an AAVSO Extended File Format report. Observer site \
-               coordinates are read automatically from FITS keywords. See the \
-               project README on GitHub for a full getting-started guide.
+               stack, the AAVSO name of the target star and an internet \
+               connection: the target's coordinates and its comparison-star \
+               sequence are downloaded from the AAVSO Variable Star Plotter \
+               (VSP), with a chart sized to the image. Fits PSFs via DynamicPSF \
+               (TG green + TB blue channels), derives the target magnitude from \
+               an ensemble of comp stars (or a single comp), checks quality \
+               against a check star, and writes an AAVSO Extended File Format \
+               report; the comparison stars and finder chart can be saved \
+               alongside it. Observer site coordinates are read automatically \
+               from FITS keywords. See the project README on GitHub for a full \
+               getting-started guide.
 
 #include <pjsr/DataType.jsh>
 #include <pjsr/UndoFlag.jsh>
