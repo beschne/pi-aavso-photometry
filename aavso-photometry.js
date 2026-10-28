@@ -1030,7 +1030,15 @@ function createVerificationImage( win, targetPix, compEntries, checkStar, checkP
       g.pen = new Pen( color, 2 );
       g.drawEllipse( sx - r, sy - r, sx + r, sy + r );
       g.pen = new Pen( 0xffffffff, 1 );
-      g.drawText( sx + r + 5, sy + Math.round( font.pixelSize / 2 ), label );
+      // Label right of the circle; left of it when it would run past the
+      // right edge, and kept inside the bitmap vertically.
+      var w  = font.width( label );
+      var tx = sx + r + 5;
+      if ( tx + w > thumbBmp.width )
+         tx = Math.max( 0, sx - r - 5 - w );
+      var ty = Math.min( Math.max( sy + Math.round( font.pixelSize / 2 ), font.pixelSize ),
+                         thumbBmp.height - 3 );
+      g.drawText( tx, ty, label );
    }
 
    starAnnotation( targetPix, 0xffff4444, TARGET.name );
