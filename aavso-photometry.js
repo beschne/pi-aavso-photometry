@@ -4,14 +4,14 @@
 
 #feature-info  Differential photometry of variable stars directly inside \
                PixInsight. Requires a linear, plate-solved OSC RGB master \
-               stack and a comparison-star CSV from AAVSO VSP. Fits PSFs via \
-               DynamicPSF (TG green + TB blue channels), derives the target \
-               magnitude from an ensemble of comp stars (or a single comp), \
-               checks quality against a check star, and writes an AAVSO \
-               Extended File Format report. Currently configured for T Coronae \
-               Borealis (the Blaze Star). Observer site coordinates are read \
-               automatically from FITS keywords. See the project README on \
-               GitHub for a full getting-started guide.
+               stack and the AAVSO name of the target star. The comparison-star \
+               sequence and finder chart are downloaded from the AAVSO Variable \
+               Star Plotter (VSP). Fits PSFs via DynamicPSF (TG green + TB blue \
+               channels), derives the target magnitude from an ensemble of comp \
+               stars (or a single comp), checks quality against a check star, \
+               and writes an AAVSO Extended File Format report. Observer site \
+               coordinates are read automatically from FITS keywords. See the \
+               project README on GitHub for a full getting-started guide.
 
 #include <pjsr/DataType.jsh>
 #include <pjsr/UndoFlag.jsh>
@@ -24,15 +24,16 @@ CoreApplication.ensureMinimumVersion( 1, 9, 4 );
 // ============================================================
 
 const TITLE   = "AAVSO Photometry";
-const VERSION = "1.4.0";
+const VERSION = "2.0.0-dev";
 
 // --- Target star -------------------------------------------------
-// Factored as an object so other targets can be added later.
+// Filled at run time (Comp Stars step) from the object name entered in
+// Setup — coordinates come from the AAVSO VSP response, or from the manual
+// RA/Dec fields if VSX does not know the name.
 const TARGET = {
-   name        : "T CRB",  // AAVSO name (used in report NAME field)
-   ra          : 239.8757, // J2000 degrees
-   dec         :  25.9202, // J2000 degrees
-   magQuiescence: 10.0,    // expected V magnitude at quiescence — used to pick default comp/check
+   name : "",   // AAVSO name (used in report NAME field)
+   ra   : NaN,  // J2000 degrees
+   dec  : NaN,  // J2000 degrees
 };
 
 // Observer site: no hardcoded fallback.
@@ -42,8 +43,34 @@ const TARGET = {
 
 // --- AAVSO report metadata ---------------------------------------
 const OBSCODE = "BSLA";
-const CHART   = "X42597QE";
 const OBSTYPE = "CCD";    // Seestar is a dedicated astronomy camera, not a consumer DSLR
+// The CHART report field is the VSP chart ID returned with the comparison
+// sequence — it depends on target, fov and maglimit, so it is not a constant.
+
+// --- AAVSO Variable Star Plotter (VSP) -----------------------------
+// Chart API: returns the comparison-star sequence as XML. Accepts either
+// star=<name> (resolved by VSX) or ra=/dec= in decimal degrees.
+const VSP_HOST           = "https://apps.aavso.org/";
+const VSP_CHART_API      = VSP_HOST + "vsp/api/chart/";
+// Default faint limit for comparison stars (editable in Setup).
+const VSP_DEFAULT_MAGLIMIT = 14.5;
+// First, small request — only used to get the target's coordinates.
+const VSP_PROBE_FOV      = 30;    // arcmin
+const VSP_PROBE_MAGLIMIT = 5;
+// The VSP chart is a square of side fov, centred on the target. The
+// requested fov is 2 × (largest target-to-corner distance) × this margin.
+const VSP_FOV_MARGIN     = 1.1;
+const VSP_MIN_FOV        = 30;    // arcmin
+const VSP_MAX_FOV        = 1200;  // arcmin — largest value verified to work
+// VSP rule: "The faintest magnitude limit allowed for charts larger than
+// 180 arcminutes is 12." A fainter mag limit caps the chart at 180′.
+const VSP_FAINT_MAX_FOV  = 180;   // arcmin
+const VSP_WIDE_MAGLIMIT  = 12;
+const VSP_TIMEOUT_S      = 60;    // total time limit for a sequence request
+// The finder-chart PNG is optional; its endpoint returned HTTP 500 after
+// ~90 s when tested (2026-10-28), so give up early rather than block the UI.
+const VSP_PNG_TIMEOUT_S  = 20;
+const VSP_USER_AGENT     = "AAVSO-Photometry-PixInsight (github.com/beschne/pi-aavso-photometry)";
 
 // --- Photometry thresholds ---------------------------------------
 // Peak above this fraction of the image maximum AND a poor DynamicPSF
@@ -77,85 +104,267 @@ const VERIFY_PADDING = 80;
 const VERIFY_MAX_SIDE = 1000;
 
 // --- Ensemble photometry -----------------------------------------
-// Stars more than this many magnitudes from TARGET.magQuiescence are not
-// pre-selected by default (user can still tick them manually).
+// Stars more than this many magnitudes from the target's estimated TG
+// magnitude are not pre-selected by default (user can still tick them manually).
 const ENSEMBLE_MAX_DELTA_MAG  = 2.0;
 // Maximum number of stars pre-selected as comp ensemble by default.
 const ENSEMBLE_DEFAULT_MAX_N  = 6;
 
 // --- Settings keys -----------------------------------------------
 const SETTINGS_NS          = "BeSchne/Photometry";
-const SETTINGS_CSV         = SETTINGS_NS + "/comparisonCsvPath";
+const SETTINGS_OBJECT      = SETTINGS_NS + "/objectName";
+const SETTINGS_MAGLIMIT    = SETTINGS_NS + "/compMagLimit";
 const SETTINGS_LAST_DIR    = SETTINGS_NS + "/lastExportDir";
 const SETTINGS_OBSCODE     = SETTINGS_NS + "/obsCode";
+const SETTINGS_SAVE_SEQ    = SETTINGS_NS + "/saveSequenceWithReport";
 
 // ============================================================
-// CSV parsing
+// AAVSO VSP comparison sequence
 // ============================================================
 
-// Reads a whole text file and returns it as a string.
-// Verify: File constructor, openForReading, read(DataType_ByteArray, size),
-// ByteArray.toString() — against PI 1.9.4 PJSR reference.
-function readTextFile( path ) {
-   var f = new File;
-   f.openForReading( path );
-   var text = f.read( DataType_ByteArray, f.size ).toString();
-   f.close();
-   return text;
+// HTTP GET via NetworkTransfer, aborted after maxSeconds in total
+// (setConnectionTimeout only limits the connection phase). Never throws for
+// HTTP errors — the caller inspects the result:
+// { ok, code, type, data, error, timedOut }.
+function httpGet( url, maxSeconds ) {
+   var data = new ByteArray;
+   var t0   = Date.now();
+   var timedOut = false;
+   var T = new NetworkTransfer;
+   T.setURL( url );
+   T.setSSL();
+   T.setConnectionTimeout( Math.min( 30, maxSeconds ) );
+   T.setCustomHTTPHeaders( [ "User-Agent: " + VSP_USER_AGENT ] );
+   T.onDownloadDataAvailable = function( chunk ) {
+      data.add( chunk );
+      return true;
+   };
+   T.onTransferProgress = function( dlTotal, dlCurrent, ulTotal, ulCurrent ) {
+      CoreApplication.processEvents();
+      if ( Date.now() - t0 > maxSeconds * 1000 ) {
+         timedOut = true;
+         return false;  // abort
+      }
+      return true;
+   };
+   var ok = T.download();
+   return {
+      ok      : ok,
+      code    : T.responseCode,
+      type    : T.contentType,
+      data    : data,
+      error   : timedOut ? "no complete response within " + maxSeconds + " s" : T.errorInformation,
+      timedOut: timedOut,
+   };
 }
 
-// RFC 4180-compliant single-row parser.
-// `pos` is a one-element array used as an in/out cursor into `text`.
-function parseCSVRow( text, pos ) {
-   var fields = [];
-   var i = pos[0];
-   var n = text.length;
-   var afterComma = false;
+// Builds a VSP chart API URL.
+// q: { star } or { ra, dec } (decimal degrees), plus fov (arcmin) and maglimit.
+function buildVspUrl( q ) {
+   var params = [];
+   if ( q.star )
+      params.push( "star=" + encodeURIComponent( q.star ) );
+   else {
+      params.push( "ra="  + q.ra.toFixed( 5 ) );
+      params.push( "dec=" + q.dec.toFixed( 5 ) );
+   }
+   params.push( "fov="      + Math.round( q.fov ) );
+   params.push( "maglimit=" + q.maglimit.toFixed( 1 ) );
+   params.push( "format=xml" );
+   return VSP_CHART_API + "?" + params.join( "&" );
+}
 
-   while ( i < n && text[i] !== '\n' && text[i] !== '\r' ) {
-      afterComma = false;
-      if ( text[i] === '"' ) {
-         // Quoted field — consume embedded "" as a literal "
-         var field = "";
-         i++;
-         while ( i < n ) {
-            if ( text[i] === '"' ) {
-               if ( i + 1 < n && text[i + 1] === '"' ) {
-                  field += '"';
-                  i += 2;
-               } else {
-                  i++;  // closing quote
-                  break;
-               }
-            } else {
-               field += text[i++];
-            }
-         }
-         fields.push( field );
-      } else {
-         // Unquoted field
-         var start = i;
-         while ( i < n && text[i] !== ',' && text[i] !== '\n' && text[i] !== '\r' )
-            i++;
-         fields.push( text.slice( start, i ).trim() );
-      }
+// First child element with the given name, or null.
+function xmlChild( el, name ) {
+   var a = el.childElementsByName( name );
+   return a.length > 0 ? a[0] : null;
+}
 
-      if ( i < n && text[i] === ',' ) {
-         i++;          // consume separator; loop reads next field
-         afterComma = true;
-      }
+// Trimmed text of the first child element with the given name, or "".
+function xmlChildText( el, name ) {
+   var c = xmlChild( el, name );
+   return c ? c.text.trim() : "";
+}
+
+// Parses the root element of a VSP chart API response.
+// Returns { chartId, imageUri, starName, fov, maglimit, target, stars }:
+//   target — { auid, ra, dec } of the variable itself (root-level auid/ra/dec),
+//            or null when queried by RA/Dec;
+//   stars  — comparison stars with a V magnitude, in the same shape the
+//            rest of the script uses:
+//            { auid, ra, dec, raStr, decStr, label, magV, errorV, magB,
+//              errorB, blended, comments }
+// Throws with err.vspRejected = true if VSP returned an <errors> list
+// (e.g. "Star … does not exist in VSX").
+function parseVspXml( root ) {
+   var errEl = xmlChild( root, "errors" );
+   if ( errEl ) {
+      var msgs = errEl.childElementsByName( "list-item" )
+         .map( function( e ) { return e.text.trim(); } )
+         .filter( function( s ) { return s.length > 0; } );
+      var err = new Error( "AAVSO VSP: " + ( msgs.length ? msgs.join( "; " ) : "request rejected" ) );
+      err.vspRejected = true;
+      throw err;
    }
 
-   // A trailing comma means the final field is empty (e.g. an empty Comments column)
-   if ( afterComma )
-      fields.push( "" );
+   var chartId = xmlChildText( root, "chartid" );
+   if ( !/^X[0-9A-Z]+$/.test( chartId ) )
+      throw new Error( "AAVSO VSP response has no valid chart ID (got \"" + chartId + "\")." );
 
-   // Advance past line terminator
-   if ( i < n && text[i] === '\r' ) i++;
-   if ( i < n && text[i] === '\n' ) i++;
-   pos[0] = i;
+   var seq = {
+      chartId : chartId,
+      imageUri: xmlChildText( root, "image_uri" ),
+      starName: xmlChildText( root, "star" ),
+      fov     : parseFloat( xmlChildText( root, "fov" ) ),
+      maglimit: parseFloat( xmlChildText( root, "maglimit" ) ),
+      target  : null,
+      stars   : [],
+   };
 
-   return fields;
+   // The variable itself: auid / ra / dec directly under <root>, after the
+   // photometry list (absent when the chart was requested by RA/Dec)
+   var tRa  = xmlChildText( root, "ra" );
+   var tDec = xmlChildText( root, "dec" );
+   if ( tRa && tDec ) {
+      var t = { auid: xmlChildText( root, "auid" ),
+                ra  : sexagesimalToDeg( tRa ) * 15,
+                dec : sexagesimalToDeg( tDec.replace( /^\+/, "" ) ) };
+      if ( isFinite( t.ra ) && isFinite( t.dec ) )
+         seq.target = t;
+   }
+
+   var phot  = xmlChild( root, "photometry" );
+   var items = phot ? phot.childElementsByName( "list-item" ) : [];
+   items.forEach( function( item ) {
+      var auid    = xmlChildText( item, "auid" );
+      var raStr   = xmlChildText( item, "ra" );
+      var decStr  = xmlChildText( item, "dec" ).replace( /^\+/, "" );
+      var label   = xmlChildText( item, "label" );
+      var bandsEl = xmlChild( item, "bands" );
+
+      var mags = {};
+      if ( bandsEl )
+         bandsEl.childElementsByName( "list-item" ).forEach( function( b ) {
+            var mag = parseFloat( xmlChildText( b, "mag" ) );
+            if ( isFinite( mag ) )
+               mags[ xmlChildText( b, "band" ) ] = { mag: mag, error: parseFloat( xmlChildText( b, "error" ) ) };
+         });
+
+      if ( !mags.V ) {
+         console.warningln( "VSP: skipping star \"" + label + "\" (" + auid + ") — no V magnitude" );
+         return;
+      }
+
+      var comments = xmlChildText( item, "comments" );
+      seq.stars.push({
+         auid    : auid,
+         ra      : sexagesimalToDeg( raStr ) * 15,  // hours → degrees
+         dec     : sexagesimalToDeg( decStr ),      // already degrees
+         raStr   : raStr,
+         decStr  : decStr,
+         label   : label,
+         magV    : mags.V.mag,
+         errorV  : mags.V.error,
+         magB    : mags.B ? mags.B.mag   : null,
+         errorB  : mags.B ? mags.B.error : null,
+         blended : /blend|pair|combined/i.test( comments ),
+         comments: comments,
+      });
+   });
+
+   return seq;
+}
+
+// Requests a comparison sequence from the VSP chart API and parses it.
+// q: see buildVspUrl(). Throws a descriptive Error on failure.
+function fetchVspSequence( q ) {
+   var url = buildVspUrl( q );
+   console.writeln( "VSP request: <raw>" + url + "</raw>" );  // <raw>: keep '&' visible
+   var r = httpGet( url, VSP_TIMEOUT_S );
+   var text = r.timedOut ? "" : r.data.utf8ToString();
+   if ( text.length === 0 )
+      throw new Error( "AAVSO VSP request failed" +
+                       ( r.code ? " (HTTP " + r.code + ")" : "" ) + ": " +
+                       ( r.error || "no data received" ) );
+
+   var doc = new XMLDocument;
+   try {
+      doc.parse( text );
+   } catch ( e ) {
+      throw new Error( "AAVSO VSP returned an unreadable response" +
+                       ( r.code ? " (HTTP " + r.code + ")" : "" ) + "." );
+   }
+   var seq = parseVspXml( doc.rootElement );  // throws on a VSP <errors> list
+   console.writeln( "VSP chart " + seq.chartId + ": " + seq.stars.length +
+                    " comparison stars (fov " + seq.fov + "′, maglimit " + seq.maglimit + ")" );
+   return seq;
+}
+
+// VSP chart size (arcmin) needed to cover the whole image with a square
+// chart centred on the target: twice the largest angular distance from the
+// target to an image corner, plus margin, clamped to [VSP_MIN_FOV, maxFov].
+// Returns { fov, needed, clamped } — needed is the unclamped size.
+function requiredChartFov( metadata, width, height, ra, dec, maxFov ) {
+   var corners = [ new Point( 0, 0 ),     new Point( width, 0 ),
+                   new Point( 0, height ), new Point( width, height ) ];
+   var maxDeg = 0;
+   for ( var i = 0; i < corners.length; i++ ) {
+      var rd = metadata.Convert_I_RD( corners[i] );
+      if ( !rd )
+         return { fov: maxFov, needed: Infinity, clamped: true };
+      maxDeg = Math.max( maxDeg, DMath.Distance( new Point( ra, dec ), rd ) );
+   }
+   var fov = Math.ceil( 2 * maxDeg * 60 * VSP_FOV_MARGIN );
+   return { fov    : Math.max( VSP_MIN_FOV, Math.min( maxFov, fov ) ),
+            needed : fov,
+            clamped: fov > maxFov };
+}
+
+// Image field size in degrees, measured through the image centre lines.
+// Returns { w, h } or null if the solution cannot convert the points.
+function imageFieldSize( metadata, width, height ) {
+   var w = metadata.DistanceI( new Point( 0, height / 2 ), new Point( width, height / 2 ) );
+   var h = metadata.DistanceI( new Point( width / 2, 0 ), new Point( width / 2, height ) );
+   return ( isFinite( w ) && isFinite( h ) ) ? { w: w, h: h } : null;
+}
+
+// Column header of the saved comparison-star CSV (same layout as the
+// former AAVSO VSP export used by v1.x).
+const CSV_COLUMNS = [ "AUID", "RA", "Dec", "Label", "Band", "Mag", "Error", "Comments" ];
+
+// RFC 4180 quoting for one CSV field.
+function csvField( v ) {
+   var s = ( v === null || v === undefined ) ? "" : String( v );
+   return /[",\r\n]/.test( s ) ? '"' + s.replace( /"/g, '""' ) + '"' : s;
+}
+
+// Writes the sequence as CSV (normally <chartId>.csv next to the report) —
+// one row per star per band (V, and B where present). A record of the run,
+// not an input.
+function writeSequenceCsv( seq, path ) {
+   var lines = [ CSV_COLUMNS.join( "," ) ];
+   seq.stars.forEach( function( s ) {
+      lines.push( [ s.auid, s.raStr, s.decStr, s.label, "V", s.magV, s.errorV, s.comments ]
+                  .map( csvField ).join( "," ) );
+      if ( s.magB !== null )
+         lines.push( [ s.auid, s.raStr, s.decStr, s.label, "B", s.magB, s.errorB, s.comments ]
+                     .map( csvField ).join( "," ) );
+   });
+   File.writeFile( path, lines.join( "\n" ) + "\n" );
+}
+
+// Downloads the VSP finder chart PNG into memory. Only AAVSO-hosted URLs are
+// followed. Returns { data: ByteArray } on success, or { error: message }.
+function fetchChartImage( uri ) {
+   // String prefix checks, not regex literals: the PJSR preprocessor treats
+   // two consecutive slashes inside a regex literal as a line comment.
+   if ( uri.indexOf( VSP_HOST ) !== 0 )
+      return { error: "unexpected chart image URL \"" + uri + "\"" };
+   var r = httpGet( uri, VSP_PNG_TIMEOUT_S );
+   if ( !r.ok || r.code !== 200 || String( r.type ).indexOf( "image" + "/" ) !== 0 )
+      return { error: "download failed" + ( r.code ? " (HTTP " + r.code + ")" : "" ) +
+                      ( r.error ? ": " + r.error : "" ) };
+   return { data: r.data };
 }
 
 // Converts a sexagesimal string to decimal degrees.
@@ -168,99 +377,6 @@ function sexagesimalToDeg( s ) {
              + parseFloat( parts[1] ) / 60
              + parseFloat( parts[2] ) / 3600;
    return neg ? -deg : deg;
-}
-
-// Expected column header (AAVSO VSP export format)
-const CSV_COLUMNS = [ "AUID", "RA", "Dec", "Label", "Band", "Mag", "Error", "Comments" ];
-
-// Loads and parses the comparison-star CSV.
-// Returns an array of star objects for all V-band rows, with B-band magnitudes
-// attached where present in the CSV.
-// Each object: { auid, ra, dec, label, magV, errorV, magB, errorB, blended, comments }
-// magB / errorB are null when no B-band row exists for that star.
-// Throws a descriptive Error on any problem.
-function loadComparisonStars( csvPath ) {
-   var text = readTextFile( csvPath );
-   text = text.replace( /\r\n/g, '\n' ).replace( /\r/g, '\n' );
-
-   var pos     = [0];
-   var lineNum = 0;
-   var vStars  = {};  // auid → star object (V-band rows)
-   var bMags   = {};  // auid → { mag, error }
-
-   // Validate header
-   var header = parseCSVRow( text, pos );
-   lineNum++;
-   for ( var c = 0; c < CSV_COLUMNS.length; c++ ) {
-      if ( header[c] !== CSV_COLUMNS[c] )
-         throw new Error(
-            "Comparison CSV column mismatch at position " + (c + 1) +
-            ": expected \"" + CSV_COLUMNS[c] + "\", got \"" + header[c] + "\""
-         );
-   }
-
-   // Parse data rows — collect V and B bands
-   while ( pos[0] < text.length ) {
-      var fields = parseCSVRow( text, pos );
-      lineNum++;
-
-      if ( fields.length === 0 || ( fields.length === 1 && fields[0] === '' ) )
-         continue;  // blank line
-
-      if ( fields.length < CSV_COLUMNS.length )
-         throw new Error(
-            "Comparison CSV: only " + fields.length + " columns on line " + lineNum +
-            " (expected " + CSV_COLUMNS.length + ")"
-         );
-
-      var band = fields[4];
-      if ( band !== "V" && band !== "B" )
-         continue;
-
-      var auid = fields[0];
-      var mag  = parseFloat( fields[5] );
-
-      if ( band === "V" ) {
-         if ( !isFinite( mag ) ) {
-            console.warningln( "CSV line " + lineNum + ": skipping star \"" + fields[3] +
-                               "\" — non-numeric V magnitude \"" + fields[5] + "\"" );
-            continue;
-         }
-         var comments = fields[7];
-         var blended  = /blend|pair|combined/i.test( comments );
-         vStars[ auid ] = {
-            auid    : auid,
-            ra      : sexagesimalToDeg( fields[1] ) * 15,  // hours → degrees
-            dec     : sexagesimalToDeg( fields[2] ),        // already degrees
-            label   : fields[3],
-            magV    : mag,
-            errorV  : parseFloat( fields[6] ),
-            magB    : null,   // filled below if a B-band row is present
-            errorB  : null,
-            blended : blended,
-            comments: comments,
-         };
-      } else {  // band === "B"
-         if ( isFinite( mag ) )
-            bMags[ auid ] = { mag: mag, error: parseFloat( fields[6] ) };
-      }
-   }
-
-   // Attach B-band magnitudes to matching V-band star objects
-   for ( var k in bMags ) {
-      if ( vStars[k] ) {
-         vStars[k].magB  = bMags[k].mag;
-         vStars[k].errorB = bMags[k].error;
-      }
-   }
-
-   var stars = [];
-   for ( var k in vStars ) stars.push( vStars[k] );
-
-   if ( stars.length === 0 )
-      throw new Error( "No usable V-band rows found in: " + csvPath );
-
-   return stars;
 }
 
 // ============================================================
@@ -411,6 +527,24 @@ function psfMagError( psf ) {
    var sigmaA   = sigmaPix * Math.sqrt( 2.0 / (Math.PI * psf.sx * psf.sy) );
    var snr      = psf.A / sigmaA;
    return snr > 0 ? 1.08574 / snr : null;
+}
+
+// Preliminary target magnitude: median zero-point (magV − instMag) of all
+// comps with a usable PSF, applied to the target. Used only to pick comps
+// of similar brightness — never reported. Returns NaN if nothing is usable.
+// measured: [{ e: { star }, instMag }]
+function estimateTargetMag( measured, targetPSF ) {
+   if ( !targetPSF ) return NaN;
+   var instT = psfInstrumentalMag( targetPSF );
+   if ( instT === null ) return NaN;
+   var zps = measured
+      .filter( function( m ) { return m.instMag !== null; } )
+      .map( function( m ) { return m.e.star.magV - m.instMag; } )
+      .sort( function( a, b ) { return a - b; } );
+   var n = zps.length;
+   if ( n === 0 ) return NaN;
+   var zp = ( n % 2 ) ? zps[ (n - 1) / 2 ] : ( zps[ n/2 - 1 ] + zps[ n/2 ] ) / 2;
+   return zp + instT;
 }
 
 // Applies quality filters to one PSF result.
@@ -582,6 +716,36 @@ function escHtml( s ) {
 function parseCoord( s, lo, hi ) {
    var v = parseFloat( s );
    return ( isFinite(v) && v >= lo && v <= hi ) ? v : NaN;
+}
+
+// Sexagesimal "D:M:S" / "D M S" / "D:M" → decimal, or NaN. Sign is honoured
+// for negative values with a zero degree part ("-00:30:00").
+function parseSexagesimal( s ) {
+   var t   = s.trim();
+   var neg = t.charAt( 0 ) === '-';
+   var p   = t.replace( /^[+-]/, '' ).split( /[:\s]+/ );
+   if ( p.length < 2 || p.length > 3 ) return NaN;
+   var v = 0;
+   for ( var i = 0; i < p.length; i++ ) {
+      var x = parseFloat( p[i] );
+      if ( !isFinite( x ) || x < 0 ) return NaN;
+      v += x / Math.pow( 60, i );
+   }
+   return neg ? -v : v;
+}
+
+// Target RA from the manual field: sexagesimal hours or decimal degrees.
+// Returns degrees in [0, 360), or NaN.
+function parseTargetRA( s ) {
+   var v = /[:\s]/.test( s.trim() ) ? parseSexagesimal( s ) * 15 : parseFloat( s );
+   return ( isFinite( v ) && v >= 0 && v < 360 ) ? v : NaN;
+}
+
+// Target Dec from the manual field: sexagesimal or decimal degrees.
+// Returns degrees in [-90, 90], or NaN.
+function parseTargetDec( s ) {
+   var v = /[:\s]/.test( s.trim() ) ? parseSexagesimal( s ) : parseFloat( s );
+   return ( isFinite( v ) && v >= -90 && v <= 90 ) ? v : NaN;
 }
 
 // ============================================================
@@ -883,7 +1047,8 @@ class PhotometryDialog extends Dialog {
       var _midMode       = 0;       // 0=(Start+End)/2  1=Start  2=Manual
       var _window        = ImageWindow.activeWindow;
       var _currentStep   = 0;
-      var _csvPath       = Settings.read( SETTINGS_CSV, DataType_String ) || "";
+      var _seq           = null;    // VSP comparison sequence (fetchVspSequence result)
+      var _seqKey        = "";      // request that produced _seq — reused while inputs are unchanged
       var _tcrb_mag      = NaN;
       var _merr          = NaN;
       var _instMag_T     = null;
@@ -1108,35 +1273,113 @@ class PhotometryDialog extends Dialog {
       imageRow.add( this.imageLbl );
       imageRow.addStretch();
 
-      var csvLblTag = new Label( setupPanel );
-      csvLblTag.text          = "Comparison CSV:";
-      csvLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
-      csvLblTag.setFixedWidth( 110 );
+      // Image field size from the plate solution — informational only
+      var fieldLblTag = new Label( setupPanel );
+      fieldLblTag.text          = "Image field:";
+      fieldLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+      fieldLblTag.setFixedWidth( 110 );
 
-      this.csvEdit = new Edit( setupPanel );
-      this.csvEdit.text    = _csvPath;
-      this.csvEdit.toolTip = "Path to AAVSO VSP comparison-star CSV export";
-      this.csvEdit.onTextUpdated = function() { _csvPath = self.csvEdit.text.trim(); };
-
-      this.csvBrowseBtn = new PushButton( setupPanel );
-      this.csvBrowseBtn.text    = "Browse...";
-      this.csvBrowseBtn.toolTip = "Open a comparison-star CSV exported from AAVSO VSP";
-      this.csvBrowseBtn.onClick = function() {
-         var dlg = new OpenFileDialog;
-         dlg.caption = "Select comparison-star CSV (AAVSO VSP export)";
-         dlg.filters = [["CSV files", "*.csv"], ["All files", "*"]];
-         if ( dlg.execute() ) {
-            _csvPath = dlg.filePath;
-            self.csvEdit.text = _csvPath;
-            Settings.write( SETTINGS_CSV, DataType_String, _csvPath );
+      this.fieldLbl = new Label( setupPanel );
+      this.fieldLbl.toolTip = "Field of view of the active image, measured from its plate solution. " +
+                              "The comparison-star chart requested from AAVSO VSP is sized to cover it.";
+      this.fieldLbl.text = "—";
+      try {
+         if ( _window && !_window.isNull ) {
+            var fsMeta = loadAstrometry( _window );
+            var fs = imageFieldSize( fsMeta, _window.mainView.image.width, _window.mainView.image.height );
+            if ( fs ) this.fieldLbl.text = format( "%.2f° × %.2f°", fs.w, fs.h );
          }
+      } catch ( e ) {
+         this.fieldLbl.text = "— (" + ( (e && e.message) ? e.message : String(e) ) + ")";
+      }
+
+      var fieldRow = new HorizontalSizer;
+      fieldRow.spacing = 8;
+      fieldRow.add( fieldLblTag );
+      fieldRow.add( this.fieldLbl );
+      fieldRow.addStretch();
+
+      // Object name — resolved by AAVSO VSX via the VSP chart API
+      var objectLblTag = new Label( setupPanel );
+      objectLblTag.text          = "Object:";
+      objectLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+      objectLblTag.setFixedWidth( 110 );
+
+      this.objectEdit = new Edit( setupPanel );
+      this.objectEdit.text    = Settings.read( SETTINGS_OBJECT, DataType_String ) || "";
+      this.objectEdit.setFixedWidth( 160 );
+      this.objectEdit.toolTip = "AAVSO (VSX) name of the variable star, e.g. \"T CrB\" or \"RS Oph\". " +
+                                "Its coordinates and comparison stars are downloaded from AAVSO VSP. " +
+                                "Also written into the report NAME field.";
+      this.objectEdit.onTextUpdated = function( txt ) {
+         Settings.write( SETTINGS_OBJECT, DataType_String, txt.trim() );
       };
 
-      var csvRow = new HorizontalSizer;
-      csvRow.spacing = 8;
-      csvRow.add( csvLblTag );
-      csvRow.add( this.csvEdit, 100 );
-      csvRow.add( this.csvBrowseBtn );
+      var maglimLblTag = new Label( setupPanel );
+      maglimLblTag.text          = "Comp mag limit:";
+      maglimLblTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
+
+      this.maglimEdit = new Edit( setupPanel );
+      var storedMaglim = Settings.read( SETTINGS_MAGLIMIT, DataType_Double );
+      this.maglimEdit.text    = format( "%.1f", ( Settings.lastReadOK && isFinite( storedMaglim ) )
+                                                ? storedMaglim : VSP_DEFAULT_MAGLIMIT );
+      this.maglimEdit.setFixedWidth( 50 );
+      this.maglimEdit.toolTip = "Faintest V magnitude of the comparison stars requested from AAVSO VSP " +
+                                "(default " + format( "%.1f", VSP_DEFAULT_MAGLIMIT ) + "). " +
+                                "Lower it for a bright target (e.g. a nova in outburst).";
+      this.maglimEdit.onTextUpdated = function( txt ) {
+         var v = parseFloat( txt );
+         if ( isFinite( v ) ) Settings.write( SETTINGS_MAGLIMIT, DataType_Double, v );
+      };
+
+      var objectRow = new HorizontalSizer;
+      objectRow.spacing = 8;
+      objectRow.add( objectLblTag );
+      objectRow.add( this.objectEdit );
+      objectRow.addSpacing( 16 );
+      objectRow.add( maglimLblTag );
+      objectRow.add( this.maglimEdit );
+      objectRow.addStretch();
+
+      // Manual coordinates — fallback when VSX does not know the name
+      var manualLblTag = new Label( setupPanel );
+      manualLblTag.setFixedWidth( 110 );
+
+      this.manualCheck = new CheckBox( setupPanel );
+      this.manualCheck.text    = "Coordinates:";
+      this.manualCheck.checked = false;
+      this.manualCheck.toolTip = "Enter the target's J2000 coordinates by hand when AAVSO VSX does not " +
+                                 "know the object name. The comparison stars are then requested by " +
+                                 "position. Switched on automatically if the name lookup fails.";
+      this.manualCheck.onCheck = function( checked ) {
+         self.raEdit.enabled  = checked;
+         self.decEdit.enabled = checked;
+      };
+
+      this.raEdit = new Edit( setupPanel );
+      this.raEdit.setFixedWidth( 110 );
+      this.raEdit.enabled = false;
+      this.raEdit.toolTip = "Target RA (J2000): hours as HH:MM:SS.s, or decimal degrees.";
+
+      this.decEdit = new Edit( setupPanel );
+      this.decEdit.setFixedWidth( 110 );
+      this.decEdit.enabled = false;
+      this.decEdit.toolTip = "Target Dec (J2000): ±DD:MM:SS, or decimal degrees.";
+
+      var raLbl = new Label( setupPanel );
+      raLbl.text = "RA";
+      var decLbl = new Label( setupPanel );
+      decLbl.text = "Dec";
+
+      var manualRow = new HorizontalSizer;
+      manualRow.spacing = 8;
+      manualRow.add( manualLblTag );
+      manualRow.add( this.manualCheck );
+      manualRow.add( raLbl );
+      manualRow.add( this.raEdit );
+      manualRow.add( decLbl );
+      manualRow.add( this.decEdit );
+      manualRow.addStretch();
 
       var obscodeLblTag = new Label( setupPanel );
       obscodeLblTag.text          = "Observer code:";
@@ -1167,7 +1410,9 @@ class PhotometryDialog extends Dialog {
       setupSizer.add( precon4  );
       setupSizer.addSpacing( 8 );
       setupSizer.add( imageRow   );
-      setupSizer.add( csvRow     );
+      setupSizer.add( fieldRow   );
+      setupSizer.add( objectRow  );
+      setupSizer.add( manualRow  );
       setupSizer.add( obscodeRow );
       setupSizer.addStretch();
       setupPanel.sizer = setupSizer;
@@ -1293,11 +1538,11 @@ class PhotometryDialog extends Dialog {
       magTag.textAlignment = TextAlignment.Right | TextAlignment.VertCenter;
       magTag.setFixedWidth( 80 );
       magTag.toolTip       = "TG = tri-colour green (OSC green channel). " +
-                             "Not the same as Johnson V — TG runs ~0.1–0.3 mag brighter for red stars like T CrB.";
+                             "Not the same as Johnson V — TG runs ~0.1–0.3 mag brighter for red stars.";
 
       this.magLbl = new Label( runPanel );
       this.magLbl.text    = "—";
-      this.magLbl.toolTip = "Derived TG magnitude of " + TARGET.name + " from differential photometry " +
+      this.magLbl.toolTip = "Derived TG magnitude of the target from differential photometry " +
                             "against the selected comp stars (ensemble ZP). TG (tri-colour green) is not " +
                             "Johnson V — it runs ~0.1–0.3 mag brighter for red stars.";
       this.magLbl.setFixedWidth( 52 );
@@ -1327,8 +1572,8 @@ class PhotometryDialog extends Dialog {
 
       this.tbMagLbl = new Label( runPanel );
       this.tbMagLbl.text    = "—";
-      this.tbMagLbl.toolTip = "Derived TB magnitude of " + TARGET.name + " from the blue OSC channel. " +
-                              "Calibrated against B-band magnitudes from the comparison CSV. " +
+      this.tbMagLbl.toolTip = "Derived TB magnitude of the target from the blue OSC channel. " +
+                              "Calibrated against B-band magnitudes from the AAVSO comparison sequence. " +
                               "Shown as '—' if no comp stars have B-band catalogue data.";
       this.tbMagLbl.setFixedWidth( 52 );
 
@@ -1355,7 +1600,7 @@ class PhotometryDialog extends Dialog {
       instTag.toolTip       = "Green-channel instrumental magnitudes = -2.5 × log₁₀(PSF flux). " +
                               "These are raw, instrument-dependent values. " +
                               "Differential photometry cancels all systematic offsets: " +
-                              TARGET.name + " magnitude = comp catalog V + (inst T − inst C). " +
+                              "target magnitude = comp catalog V + (inst T − inst C). " +
                               "TB blue-channel PSF values appear in the Process Console.";
 
       this.instLbl = new Label( runPanel );
@@ -1734,7 +1979,7 @@ class PhotometryDialog extends Dialog {
       this.verifyCtrl = new Control( verifyPanel );
       this.verifyCtrl.setMinSize( 200, 200 );
       this.verifyCtrl.toolTip =
-         "Annotated thumbnail — red: T CrB, green: comp, cyan: check. " +
+         "Annotated thumbnail — red: target, green: comp, cyan: check. " +
          "Resize the dialog to scale the image.";
       this.verifyCtrl.onPaint = function( x0, y0, x1, y1 ) {
          var g = new Graphics( this );
@@ -1869,7 +2114,8 @@ class PhotometryDialog extends Dialog {
          var dateStr = !isNaN(self.midJD)
             ? jdToISO( self.midJD ).substring( 0, 10 )
             : format( "%04d-%02d-%02d", _now.getFullYear(), _now.getMonth() + 1, _now.getDate() );
-         var suggestedName = "tcrb_photometry_" + dateStr + ( self.rbHuman.checked ? "_human" : "" );
+         var nameSlug = TARGET.name.toLowerCase().replace( /[^a-z0-9]+/g, "" ) || "target";
+         var suggestedName = nameSlug + "_photometry_" + dateStr + ( self.rbHuman.checked ? "_human" : "" );
          var lastDir = Settings.read( SETTINGS_LAST_DIR, DataType_String )
             || ( (_window && !_window.isNull && _window.filePath)
                  ? File.extractDirectory( _window.filePath )
@@ -1890,16 +2136,37 @@ class PhotometryDialog extends Dialog {
                }
             }
             File.writeTextFile( outPath, _reportText );
-            Settings.write( SETTINGS_LAST_DIR, DataType_String,
-                            File.extractDirectory( outPath ) );
+            var outDir = File.extractDirectory( outPath );
+            Settings.write( SETTINGS_LAST_DIR, DataType_String, outDir );
             console.writeln( SEP );
             console.writeln( "Report exported to:\n  " + outPath );
+            if ( self.saveSeqCheck.checked && _seq ) {
+               var saved = saveSequenceFiles( _seq, outDir );
+               if ( saved.length > 0 )
+                  console.writeln( "Comparison sequence saved:\n  " + saved.join( "\n  " ) );
+               else
+                  console.writeln( "Comparison sequence " + _seq.chartId + " already saved in this folder." );
+            }
             console.writeln( SEP );
          }
       };
 
+      this.saveSeqCheck = new CheckBox( reportPanel );
+      this.saveSeqCheck.text = "Also save comparison stars and finder chart";
+      var storedSaveSeq = Settings.read( SETTINGS_SAVE_SEQ, DataType_Boolean );
+      this.saveSeqCheck.checked = Settings.lastReadOK ? storedSaveSeq : true;
+      this.saveSeqCheck.toolTip = "On export, also write <chart ID>.csv (the AAVSO comparison stars used) " +
+                                  "and <chart ID>.png (finder chart, if it could be downloaded) into the " +
+                                  "report's folder. Existing files are kept. AAVSO revises sequences over " +
+                                  "time, so this preserves exactly what the report's CHART refers to.";
+      this.saveSeqCheck.onCheck = function( checked ) {
+         Settings.write( SETTINGS_SAVE_SEQ, DataType_Boolean, checked );
+      };
+
       var outRow = new HorizontalSizer;
+      outRow.spacing = 16;
       outRow.addStretch();
+      outRow.add( this.saveSeqCheck );
       outRow.add( this.outBrowseBtn );
       outRow.addStretch();
 
@@ -2050,6 +2317,157 @@ class PhotometryDialog extends Dialog {
       this.sizer.add( contentRow, 100 );
 
       // ============================================================
+      // Target + comparison sequence (AAVSO VSP)
+      // ============================================================
+
+      // Shows a progress message in the Comp Stars step and the console, and
+      // repaints immediately — the network requests and PSF fits block the UI.
+      function setStatus( msg ) {
+         discoveryLbl.text = msg;
+         console.writeln( "<b>" + escHtml( msg ) + "</b>" );
+         CoreApplication.processEvents();
+      }
+
+      // Resolves the target and fetches its comparison sequence. Sets TARGET
+      // and returns the sequence. The previous result is reused while image,
+      // object name, coordinates and magnitude limit are unchanged, so going
+      // back and forth between steps does not repeat the network requests.
+      function resolveSequence( metadata, image ) {
+         var name     = self.objectEdit.text.trim();
+         var maglimit = parseFloat( self.maglimEdit.text );
+         if ( !name )
+            throw new Error( "Enter the object name in the Setup step." );
+         if ( !isFinite( maglimit ) || maglimit <= 0 || maglimit > 25 )
+            throw new Error( "Comp mag limit must be a V magnitude, e.g. " +
+                             format( "%.1f", VSP_DEFAULT_MAGLIMIT ) + "." );
+
+         var manual = self.manualCheck.checked;
+         var ra = NaN, dec = NaN;
+         if ( manual ) {
+            ra  = parseTargetRA(  self.raEdit.text  );
+            dec = parseTargetDec( self.decEdit.text );
+            if ( isNaN( ra ) || isNaN( dec ) )
+               throw new Error( "Enter a valid RA and Dec in the Setup step, or untick \"Coordinates\"." );
+         }
+
+         var key = [ _window.mainView.id, image.width, image.height,
+                     name, maglimit, manual, ra, dec ].join( "|" );
+         if ( _seq && key === _seqKey ) {
+            setStatus( "Steps 1–3/4: Reusing AAVSO chart " + _seq.chartId + " (inputs unchanged)." );
+            return _seq;
+         }
+
+         if ( manual )
+            setStatus( "Step 1/4: Using manual coordinates for \"" + name + "\"." );
+         else {
+            // Small first request — only to get the target's coordinates
+            var probe;
+            try {
+               setStatus( "Step 1/4: Looking up \"" + name + "\" at AAVSO (VSX)…" );
+               probe = fetchVspSequence( { star: name, fov: VSP_PROBE_FOV, maglimit: VSP_PROBE_MAGLIMIT } );
+            } catch ( e ) {
+               if ( e.vspRejected ) {
+                  self.manualCheck.checked = true;
+                  self.manualCheck.onCheck( true );
+                  throw new Error( e.message + "\n\nCheck the object name, or enter the " +
+                                   "coordinates manually in the Setup step." );
+               }
+               throw e;
+            }
+            if ( !probe.target ) {
+               self.manualCheck.checked = true;
+               self.manualCheck.onCheck( true );
+               throw new Error( "AAVSO VSP did not return coordinates for \"" + name + "\". " +
+                                "Enter them manually in the Setup step." );
+            }
+            ra  = probe.target.ra;
+            dec = probe.target.dec;
+         }
+
+         // Chart sized to cover the whole image around the target
+         var maxFov = ( maglimit > VSP_WIDE_MAGLIMIT ) ? VSP_FAINT_MAX_FOV : VSP_MAX_FOV;
+         var fovReq = requiredChartFov( metadata, image.width, image.height, ra, dec, maxFov );
+         console.writeln( "Requesting a " + fovReq.fov + "′ chart around the target." );
+         if ( fovReq.clamped ) {
+            if ( maxFov === VSP_FAINT_MAX_FOV )
+               console.warningln( "The image needs a " + fovReq.needed + "′ chart, but AAVSO VSP allows " +
+                                  "only " + VSP_FAINT_MAX_FOV + "′ for a mag limit fainter than " +
+                                  VSP_WIDE_MAGLIMIT + ". Comparison stars near the image corners are " +
+                                  "missing; set Comp mag limit to " + VSP_WIDE_MAGLIMIT +
+                                  " or brighter to cover the whole field." );
+            else
+               console.warningln( "The image is larger than the biggest VSP chart (" + VSP_MAX_FOV +
+                                  "′) — comparison stars near the image corners may be missing." );
+         }
+
+         setStatus( "Step 2/4: Downloading comparison stars from AAVSO VSP (" + fovReq.fov +
+                    "′ chart, mag limit " + format( "%.1f", maglimit ) + ")…" );
+         var seq = fetchVspSequence( manual
+            ? { ra: ra,     dec: dec, fov: fovReq.fov, maglimit: maglimit }
+            : { star: name,           fov: fovReq.fov, maglimit: maglimit } );
+         if ( seq.stars.length === 0 )
+            throw new Error( "AAVSO VSP chart " + seq.chartId + " has no comparison stars with a " +
+                             "V magnitude (mag limit " + format( "%.1f", maglimit ) + ")." );
+
+         TARGET.name = manual ? name : ( seq.starName || name );
+         TARGET.ra   = ( !manual && seq.target ) ? seq.target.ra  : ra;
+         TARGET.dec  = ( !manual && seq.target ) ? seq.target.dec : dec;
+
+         loadChartImage( seq );
+         _seqKey = key;
+         return seq;
+      }
+
+      // Gets the finder chart PNG into memory (seq.pngData) for saving at
+      // export. Same request → same chart ID, so a PNG saved by an earlier
+      // export to the last export folder is reused instead of downloaded —
+      // the download is slow (or failing) and the chart does not change.
+      // Failure is a warning: it never stops the photometry.
+      function loadChartImage( seq ) {
+         seq.pngData = null;
+         var lastDir = Settings.read( SETTINGS_LAST_DIR, DataType_String );
+         var prev    = lastDir ? lastDir + "/" + seq.chartId + ".png" : "";
+         if ( prev && File.exists( prev ) ) {
+            seq.pngData = File.readFile( prev );
+            setStatus( "Step 3/4: Finder chart " + seq.chartId + ".png already saved — reusing it." );
+            return;
+         }
+         setStatus( "Step 3/4: Downloading finder chart " + seq.chartId + ".png (gives up after " +
+                    VSP_PNG_TIMEOUT_S + " s)…" );
+         var r = fetchChartImage( seq.imageUri );
+         if ( r.error )
+            console.warningln( "Finder chart not available (" + r.error + "). It can be viewed at " +
+                               seq.imageUri );
+         else
+            seq.pngData = r.data;
+      }
+
+      // Writes <chartId>.csv and, if available, <chartId>.png into `dir`
+      // (the export folder). Existing files are kept — several reports from
+      // one night share one copy. Returns the list of files written.
+      function saveSequenceFiles( seq, dir ) {
+         var written = [];
+         var base = dir + "/" + seq.chartId;
+         try {
+            if ( !File.exists( base + ".csv" ) ) {
+               writeSequenceCsv( seq, base + ".csv" );
+               written.push( base + ".csv" );
+            }
+            if ( seq.pngData && !File.exists( base + ".png" ) ) {
+               File.writeFile( base + ".png", seq.pngData );
+               written.push( base + ".png" );
+            }
+         } catch ( e ) {
+            console.warningln( "Could not save the comparison sequence in " + dir + ": " +
+                               ( (e && e.message) ? e.message : String(e) ) );
+         }
+         if ( !seq.pngData && !File.exists( base + ".png" ) )
+            console.warningln( "Finder chart " + seq.chartId + ".png not saved — it could not be " +
+                               "downloaded. It can be viewed at " + seq.imageUri );
+         return written;
+      }
+
+      // ============================================================
       // Discovery — PSF-fits all in-frame V-band stars + target;
       // populates _allInFrame, _targetPix, _targetPSF, TreeBox.
       // Runs automatically on entering the Comp Stars step.
@@ -2067,16 +2485,13 @@ class PhotometryDialog extends Dialog {
          _targetPSF_B     = null;
 
          self.compTreeBox.clear();
-         discoveryLbl.text = "Running discovery…";
+         discoveryLbl.text = "Starting discovery…";
          updateCompCount();
          updateStepNav();
 
          _window = ImageWindow.activeWindow;
          if ( !_window || _window.isNull )
             throw new Error( "No active image window. Open a plate-solved OSC stack first." );
-
-         if ( !_csvPath || !File.exists( _csvPath ) )
-            throw new Error( "Comparison CSV not found — use Browse in Setup to select it." );
 
          console.writeln( SEP );
          console.writeln( TITLE + " v" + VERSION + " — Discovery" );
@@ -2087,14 +2502,19 @@ class PhotometryDialog extends Dialog {
          var image    = _window.mainView.image;
          self.imageLbl.text = _window.mainView.id;
 
+         // Target coordinates + comparison sequence from AAVSO VSP
+         _seq = resolveSequence( metadata, image );
+         console.writeln( "Target " + TARGET.name + ": RA " + format( "%.5f", TARGET.ra ) +
+                          "°, Dec " + format( "%+.5f", TARGET.dec ) + "°  — chart " + _seq.chartId );
+
          // Project target
          _targetPix = celestialToPixel( metadata, TARGET.ra, TARGET.dec );
          if ( !_targetPix || _targetPix.x < 0 || _targetPix.y < 0 ||
               _targetPix.x >= image.width || _targetPix.y >= image.height )
             throw new Error( TARGET.name + " is outside the image frame." );
 
-         // Load comparison stars and project in-frame ones
-         var allStars   = loadComparisonStars( _csvPath );
+         // Project in-frame comparison stars
+         var allStars   = _seq.stars;
          var nonBlended = allStars.filter( function(s) { return !s.blended; } );
          allStars.filter( function(s) { return s.blended; } ).forEach( function(s) {
             console.warningln( "Excluded (blended): " + s.label + " (" + s.auid + ") — " + s.comments );
@@ -2118,6 +2538,8 @@ class PhotometryDialog extends Dialog {
          inFrame.forEach( function(e) {
             psfInput.push( { label: e.star.label, x: e.x, y: e.y } );
          });
+         setStatus( "Step 4/4: Fitting PSFs of " + TARGET.name + " and " + inFrame.length +
+                    " comparison stars (green and blue channels)…" );
          var psfFits   = fitPSF( _window, psfInput );      // green channel (TG)
          var psfFits_B = fitPSF( _window, psfInput, 2 );  // blue channel (TB)
 
@@ -2140,15 +2562,39 @@ class PhotometryDialog extends Dialog {
          }
          console.writeln( "PSF — " + TARGET.name + ": " + psfLine( _targetPSF ) );
 
-         // Build _allInFrame
-         inFrame.forEach( function(e) {
+         // Quality-check every candidate and get its instrumental magnitudes
+         var measured = inFrame.map( function(e) {
             var psf     = psfFits[   e.star.label ];
             var psfB    = psfFits_B[ e.star.label ];
             var qMsg    = checkPSFQuality( psf,  e.x, e.y );
             var qMsgB   = checkPSFQuality( psfB, e.x, e.y );
-            var instMag  = ( !qMsg  && psf  ) ? psfInstrumentalMag( psf  ) : null;
-            var instMagB = ( !qMsgB && psfB ) ? psfInstrumentalMag( psfB ) : null;
-            var delta   = Math.abs( e.star.magV - TARGET.magQuiescence );
+            return {
+               e       : e,
+               psf     : psf,
+               psfB    : psfB,
+               qMsg    : qMsg,
+               instMag : ( !qMsg  && psf  ) ? psfInstrumentalMag( psf  ) : null,
+               instMagB: ( !qMsgB && psfB ) ? psfInstrumentalMag( psfB ) : null,
+            };
+         });
+
+         // Preliminary TG estimate of the target from all good comps (median
+         // zero-point) — the reference for picking comps of similar brightness.
+         var targetEst = estimateTargetMag( measured, _targetPSF );
+         if ( isNaN( targetEst ) )
+            throw new Error( "No comparison star with a usable PSF — cannot estimate " + TARGET.name + "." );
+         console.writeln( "Preliminary " + TARGET.name + " estimate: " + format( "%.2f", targetEst ) +
+                          " TG (median zero-point of all good comps)" );
+
+         // Build _allInFrame
+         measured.forEach( function(m) {
+            var e        = m.e;
+            var psf      = m.psf;
+            var psfB     = m.psfB;
+            var qMsg     = m.qMsg;
+            var instMag  = m.instMag;
+            var instMagB = m.instMagB;
+            var delta   = Math.abs( e.star.magV - targetEst );
             var notes;
             if      ( qMsg )                        notes = qMsg;
             else if ( instMag === null )            notes = "flux zero";
@@ -2202,7 +2648,8 @@ class PhotometryDialog extends Dialog {
          updateCheckCombo();
          updateCompCount();
 
-         discoveryLbl.text = inFrame.length + " V-band stars in frame.  " +
+         discoveryLbl.text = TARGET.name + ", AAVSO chart " + _seq.chartId + ":  " +
+            inFrame.length + " V-band stars in frame.  " +
             _ensembleEntries.length + " pre-selected as comp.  " +
             "Click rows to toggle.";
 
@@ -2674,7 +3121,7 @@ class PhotometryDialog extends Dialog {
          }
          lines.push( "" );
          lines.push( kv( "Observer code",   self.obscodeEdit.text ) );
-         lines.push( kv( "Chart",           CHART                 ) );
+         lines.push( kv( "Chart",           _seq.chartId          ) );
          lines.push( kv( "Software",        TITLE + " v" + VERSION) );
          lines.push( kv( "Notes",           notes                 ) );
          lines.push( bar );
@@ -2703,7 +3150,7 @@ class PhotometryDialog extends Dialog {
                      ? format( "%.4f", _ensembleZP + _instMag_K )
                      : kmag;
          var tgLine = [
-            TARGET.name,
+            sanitizeField( TARGET.name ),
             format( "%.6f", midJD      ),
             format( "%.3f", _tcrb_mag  ),
             format( "%.3f", _merr      ),
@@ -2711,7 +3158,7 @@ class PhotometryDialog extends Dialog {
             cname, cmag,
             kname, kmagOut,
             amassStr,
-            "na", CHART,
+            "na", _seq.chartId,
             sanitizeField( notes ),
          ].join( "," );
          var output = headerLines.join( "\n" ) + "\n" + tgLine;
@@ -2726,7 +3173,7 @@ class PhotometryDialog extends Dialog {
             else
                tbKmag = format( "%.4f", _instMag_K_B );
             var tbLine  = [
-               TARGET.name,
+               sanitizeField( TARGET.name ),
                format( "%.6f", midJD        ),
                format( "%.3f", _tcrb_mag_B  ),
                format( "%.3f", _merr_B      ),
@@ -2734,7 +3181,7 @@ class PhotometryDialog extends Dialog {
                cname, tbCmag,
                kname, tbKmag,
                amassStr,
-               "na", CHART,
+               "na", _seq.chartId,
                sanitizeField( tbNotes ),
             ].join( "," );
             output += "\n" + tbLine;

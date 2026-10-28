@@ -1,7 +1,8 @@
 # Plan: generic target, automatic comparison stars
 
 Branch: `generic-target` (from `main` at v1.4.0). `main` stays the T CrB release.
-Status: **plan only — nothing implemented.** Last reviewed 2026-10-28.
+Status: **steps 1–6 implemented in `aavso-photometry.js` (2.0.0-dev), not yet
+run in PixInsight.** Steps 7–9 open. Last updated 2026-10-28.
 
 ## Goal
 
@@ -18,18 +19,21 @@ CSV file picker is removed.
 | `https://apps.aavso.org/vsp/api/chart/?star=<name>&fov=<arcmin>&maglimit=<mag>&format=xml` works (200, XML) | T CrB, RS Oph, SS Cyg |
 | Same endpoint accepts `ra=<deg>&dec=<deg>` (decimal degrees) instead of `star` | `ra=239.8757&dec=25.9202` → 12 comps |
 | Response: `chartid`, `image_uri` (PNG), `star`, `fov`, `maglimit`, and `photometry` list with `auid`, `ra`, `dec`, `label`, `bands` (V, B, Rc, Ic, J, H, K — each `mag` + `error`), `comments` | `chart60.xml` |
-| **The target itself is in the `photometry` list** as an entry with `auid`/`ra`/`dec` but **no `label` and no `bands`** | T CrB → `000-BBW-825 15:59:30.16 25:55:12.6` (matches the hardcoded position); RS Oph, SS Cyg likewise; also with `maglimit=5` |
+| **The target's own `auid`/`ra`/`dec` are direct children of `<root>`**, after the `photometry` list (corrected — an earlier draft said it was a label-less list entry) | T CrB → `000-BBW-825 15:59:30.16 25:55:12.6` (matches the hardcoded position); RS Oph, SS Cyg likewise; also with `maglimit=5` |
 | Query by `ra`/`dec` returns **no** target entry | as expected |
 | Unknown name → HTTP 400 with `<errors><list-item>Star … does not exist in VSX</list-item>…` | `NoSuchStar XYZ` |
-| `chartid` is **new on every request** (T CrB 60′: `X42615NN` in July, `X43358AIB` today) | — |
+| `chartid` depends on the request: identical parameters return the same ID within a day (`X43358AIB` twice for T CrB 60′); it differs from July (`X42615NN`) | — |
+| Comparison V magnitudes for T CrB 60′ are identical to the July CSV `X42615NN` (12/12 stars) | offline test |
+| **Finder-chart PNG endpoint is failing:** `vsp/chart/<id>.png` and the VSP chart page both return HTTP 500 after ~90 s | tested twice, fresh and old chart IDs |
 | Coverage is the **full square chart**, not half its radius: `fov=60` returned stars up to 39.4′ from the target (≈ 30′·√2) | separation check on `chart60.xml` |
 | B is delivered directly — no need to derive B = V + (B−V) | — |
+| **VSP limits wide charts:** fov > 180′ requires maglimit ≤ 12 (HTTP 400 otherwise). The script caps the chart at 180′ when the comp mag limit is fainter than 12 and warns that corner stars are missing | found in the first PixInsight run (Seestar field needs 198′); 180′/14.5 ✓, 181′/14.5 ✗, 330′/12 ✓ |
 | VSX API (`www.aavso.org/vsx/…`) is behind a Cloudflare challenge; CDS (SIMBAD/Sesame) timed out from the sandbox | — |
 
 ## Changes since the first draft of this plan
 
 1. **No external name resolver.** The target's coordinates come from the
-   label-less entry in the VSP response, i.e. VSX's own name resolution. Sesame is
+   root-level `ra`/`dec` in the VSP response, i.e. VSX's own name resolution. Sesame is
    dropped: one network dependency instead of two, and the target name in the
    report is guaranteed to match what AAVSO knows.
 2. **Manual fallback queries VSP by RA/Dec.** If the name is unknown to VSX, the
@@ -82,13 +86,11 @@ CSV file picker is removed.
 
 ### 4. Parse
 
-- Check whether PJSR has an XML parser (`XMLDocument` or similar, as used by
-  `ImageSolver`/XISF code). Otherwise a targeted parser for this fixed
-  structure: split `<photometry>` into top-level `<list-item>` blocks, then
-  read fields per block. Nested `<list-item>` inside `<bands>` must be handled.
-- Decode XML entities in `comments`.
-- Entry without `label` and without `bands` → target. If more than one, take
-  the one closest to the chart centre; if none (RA/Dec query), use manual
+- PJSR has `XMLDocument.parse()` with `XMLElement.childElementsByName()` and
+  `.text` (documented in the PI 1.9.4 PJSR reference) — used directly; nested
+  `<list-item>` inside `<bands>` is handled because the lookup is
+  non-recursive.
+- Root-level `ra`/`dec` → target. If absent (RA/Dec query), use the manual
   coordinates.
 - Produce exactly the star objects `loadComparisonStars()` returns today (with
   `magV`/`errorV`, `magB`/`errorB`, blend flag from `comments`), so PSF,
@@ -98,14 +100,25 @@ CSV file picker is removed.
 
 ### 5. Saved artifacts
 
-- Write `<chartid>.csv` (current CSV format:
-  `AUID,RA,Dec,Label,Band,Mag,Error,Comments`, V and B rows) and
-  `<chartid>.png` (downloaded from `image_uri`) **next to the master file**.
-- If the image window has no file path (unsaved stack), fall back to the last
-  export directory (`SETTINGS_LAST_DIR`), and say where it was written.
+- **Changed after the first PixInsight runs:** the files are written **on
+  export, into the report's folder**, not next to the master at discovery. A
+  checkbox next to Export, "Also save comparison stars and finder chart" (on by
+  default, persisted as `BeSchne/Photometry/saveSequenceWithReport`), controls
+  it. Reason: the CSV is the evidence for the report's `CHART` line and AAVSO
+  revises sequences over time; runs that are never exported leave no files;
+  no special case for unsaved stacks.
+- Files: `<chartid>.csv` (`AUID,RA,Dec,Label,Band,Mag,Error,Comments`, V and
+  B rows) and `<chartid>.png` (if it could be downloaded). Existing files in
+  the export folder are kept, so several reports share one copy.
+- Discovery downloads the PNG into memory; if `<chartid>.png` already exists
+  in the last export folder it is read from there instead.
 - These files are records of a run, not inputs. The CSV parser
-  (`loadComparisonStars`) is replaced by the XML path; keep `parseCSVRow` only if
-  still needed for writing/escaping — otherwise remove.
+  (`loadComparisonStars`, `parseCSVRow`, `readTextFile`) is removed.
+- The PNG download is limited to 20 s and only warns on failure (endpoint
+  currently returns HTTP 500); the console then prints the chart URL.
+- The sequence is cached for the dialog session (same image, name,
+  coordinates, mag limit), so revisiting the Comp Stars step does not
+  re-download.
 
 ### 6. Target-specific constants
 
@@ -150,17 +163,25 @@ CSV file picker is removed.
 
 ### 9. Testing
 
-- Offline (here): XML → star list → CSV transform and FOV arithmetic in Node
-  against saved responses (T CrB 60′/900′ maglimit 5, RS Oph, SS Cyg, unknown
-  name). Same JS function as in the script.
+- Offline (done 2026-10-28, 31/31 checks pass): the script's own functions,
+  loaded in Node with PJSR mocks, against saved responses (T CrB 60′ and
+  900′/maglimit 5, RS Oph, SS Cyg, RA/Dec query, unknown name): XML parse,
+  target coordinates, CSV writer, URL builder, manual RA/Dec parsing, FOV
+  sizing (centred, corner, clamped), target-magnitude estimate. The harness is
+  not in the repo (the project rule is PJSR only).
 - In PixInsight (user): T CrB master — compare result against a v1.4.0 run on
   the same file; then a second target; then the unknown-name / manual RA/Dec path;
   then an unsaved in-memory stack.
 
 ## Open points
 
-- `NetworkTransfer` usage in PJSR 1.9.4 is untested.
-- Maximum `fov` accepted by VSP is unknown.
+- `NetworkTransfer` usage follows the PJSR reference but is untested in
+  PixInsight — in particular whether `download()` returns the body of an
+  HTTP 400 (needed for the "does not exist in VSX" message) and whether the
+  progress handler fires often enough for the time limit.
+- `fov=1200` was accepted; the real maximum is unknown, so 1200′ is the clamp.
+- Finder-chart PNG endpoint returns HTTP 500 — recheck later; nothing to change
+  in the script when it recovers.
 - Whether WebObs prefers `RS OPH` or `RS Oph` in `NAME`.
 - Offline use: without network the script cannot run. A "reuse saved
   `<chartid>.csv`" option would bring back a file picker, so it is out of scope
