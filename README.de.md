@@ -35,7 +35,7 @@ Der Dialog ist ein sechsstufiger Assistent — Setup → Vergleichssterne → Ph
 
 ## Voraussetzungen
 
-- **PixInsight 1.9.4 „Lockhart"** oder neuer (V8-JS-Engine erforderlich)
+- **PixInsight 1.9.4 „Lockhart"** oder neuer (V8-JS-Engine erforderlich); getestet mit PixInsight 1.9.5 Build 1706 unter macOS (arm64)
 - Ein geöffneter, plate-gesolvter OSC-(One-Shot-Color-)RGB-Master-Light-Stack, debayert in PixInsight
 - Der AAVSO-(VSX-)Name des Ziels, z. B. `T CrB` — oder seine J2000-Koordinaten
 - Eine Internetverbindung (die Vergleichssterne werden aus dem [AAVSO VSP](https://www.aavso.org/vsp) geladen)
@@ -216,6 +216,31 @@ nicht mehr erfassbar.
 
 AAVSO gibt bei Ausbruchsbeginn _Alert Notices_ mit konkreten Karten- und
 Belichtungsempfehlungen heraus — [aavso.org/news](https://www.aavso.org/news) beobachten.
+
+---
+
+## Kompatibilität mit PixInsight 1.9.6
+
+> **Status: noch nicht getestet.** PixInsight 1.9.6 „Lockhart" (Build 1713) ist im Oktober 2026 erschienen. Das Skript wurde anhand der [Release Notes von 1.9.6](https://pixinsight.net/dev/index.php?articles/pixinsight-1-9-6-lockhart-released.28/) geprüft, lief aber noch nicht unter 1.9.6. Bis die Tests abgeschlossen sind, bleibt PixInsight 1.9.5 Build 1706 die verifizierte Version.
+
+Eine Code-Prüfung gegen die inkompatiblen Änderungen in 1.9.6 ergab keinen Änderungsbedarf:
+
+- **Template-Literale:** `//` oder `/*` innerhalb eines Template-Literals ist jetzt ein Compile-Fehler. Das Skript enthält keine solchen Literale.
+- **Netzwerkzugriff:** Die Semantik von `FileDownload`/`FileUpload` hat sich geändert. Das betrifft das Skript nicht, denn es verwendet `NetworkTransfer` über HTTPS mit eigener Fehlerbehandlung.
+- **Mondphase:** 1.9.6 behebt einen PJSR-Fehler, durch den der Phasenwinkel des Mondes immer etwa null war. Das Skript ist davon nicht abhängig, weil es die Mondbeleuchtung selbst berechnet.
+- **Mindestversion:** Das Skript setzt weiterhin 1.9.4 oder neuer voraus. Es nutzt keine API, die erst in 1.9.6 hinzukam.
+
+Im Test zu prüfen:
+
+- **Contained Windowing Mode** (jetzt Standard): Die Return-Taste löst in einem eingebetteten Dialog dessen Standard-Button aus. Prüfen, ob Return in den Feldern Object, Start, End und Mid-time den Assistenten nicht ungewollt weiterschaltet oder schließt. Falls doch, `autoDefaultButton = false` am Dialog setzen.
+- **DynamicPSF:** Die PSF-Anpassung wurde überarbeitet. Fits starten jetzt mit dem gemessenen Maximum und der Breite jedes Sterns, und ein Fehler, durch den Fits heller Sterne zu den Flügeln konvergieren konnten, ist behoben. TG/TB-Ergebnisse desselben Stacks unter 1.9.5 und 1.9.6 vergleichen, um einen systematischen Versatz in der Lichtkurve auszuschließen.
+- **FITS-WCS:** 1.9.6 behebt WCS-Keywords, die bei der Hälfte aller Rotationswinkel als gespiegelte Lösung gelesen wurden. Stacks, die mit anderer Software astrometrisch gelöst und aus FITS geladen wurden, sollten jetzt korrekt projiziert werden. Den Schritt Verification erneut prüfen.
+
+Relevante Verbesserungen in 1.9.6 für diesen Arbeitsablauf:
+
+- Crop, Resample und Rotation erhalten jetzt eine lineare astrometrische Lösung, sodass beschnittene Stacks nicht mehr neu gelöst werden müssen.
+- ImageSolver 6.6 kann Bilder mit einem lokalen Gaia-DR3-Index blind lösen. Die Indexdatei muss separat heruntergeladen werden.
+- Das neue Skript PhotometricAnalysis schreibt zusammen mit AperturePhotometry 2.2 ebenfalls Berichte im AAVSO Extended Format. Es wählt seine Vergleichssterne automatisch, mit Katalogphotometrie aus Gaia DR3. Dieses Skript verwendet dagegen die offizielle AAVSO-VSP-Sequenz und deren Chart-ID. So bleiben die Messungen mit denen anderer Beobachter in AAVSO-Kampagnen konsistent.
 
 ---
 

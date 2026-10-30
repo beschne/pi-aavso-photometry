@@ -35,7 +35,7 @@ The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-
 
 ## Requirements
 
-- **PixInsight 1.9.4 "Lockhart"** or later (V8 JS engine required)
+- **PixInsight 1.9.4 "Lockhart"** or later (V8 JS engine required); tested with PixInsight 1.9.5 build 1706 on macOS (arm64)
 - An open, plate-solved OSC (one-shot colour) RGB master light stack, debayered in PixInsight
 - The target's AAVSO (VSX) name, e.g. `T CrB` — or its J2000 coordinates
 - An internet connection (the comparison stars are downloaded from [AAVSO VSP](https://www.aavso.org/vsp))
@@ -215,6 +215,31 @@ sub-second frames, and faint comp stars may be undetectable.
 
 AAVSO will issue Alert Notices with specific chart and exposure guidance when the
 outburst begins — monitor [aavso.org/news](https://www.aavso.org/news).
+
+---
+
+## PixInsight 1.9.6 compatibility
+
+> **Status: not yet tested.** PixInsight 1.9.6 "Lockhart" (build 1713) was released in October 2026. The script has been reviewed against the [1.9.6 release notes](https://pixinsight.net/dev/index.php?articles/pixinsight-1-9-6-lockhart-released.28/), but it has not yet been run under 1.9.6. Until tests are complete, PixInsight 1.9.5 build 1706 remains the verified version.
+
+A code review against the 1.9.6 breaking changes found no required modifications:
+
+- **Template literals:** `//` or `/*` inside a template literal is now a compile error. The script contains no such literals.
+- **Network access:** The `FileDownload`/`FileUpload` semantics have changed. They do not apply here, because the script uses `NetworkTransfer` over HTTPS with its own error handling.
+- **Moon phase:** 1.9.6 fixes a PJSR bug that reported the Moon's phase angle as always about zero. The script does not depend on it, because it computes the lunar illumination itself.
+- **Minimum version:** The script still requires 1.9.4 or later. It does not use any 1.9.6-only API.
+
+Points to verify in testing:
+
+- **Contained windowing mode** (now the default): pressing Return in a hosted dialog triggers its default button. Check that Return in the Object, Start, End and Mid-time fields does not unintentionally advance or close the wizard. If it does, set `autoDefaultButton = false` on the dialog.
+- **DynamicPSF:** PSF fitting was reworked. Fits now start from the measured peak and width of each star, and a bug that let fits of bright stars converge to the wings has been fixed. Compare TG/TB results for the same stack under 1.9.5 and 1.9.6 to rule out a systematic offset in the light curve.
+- **FITS WCS:** 1.9.6 fixes WCS keywords that were read as mirrored solutions for half of all rotation angles. Stacks that were plate-solved by other software and loaded from FITS should now project correctly. Re-check the Verification step.
+
+Relevant 1.9.6 improvements for this workflow:
+
+- Crop, Resample and Rotation now preserve a linear astrometric solution, so cropped stacks no longer need to be re-solved.
+- ImageSolver 6.6 can solve images blindly using a local Gaia DR3 index. The index file must be downloaded separately.
+- The new PhotometricAnalysis script, used together with AperturePhotometry 2.2, also writes AAVSO Extended Format reports. It selects its comparison stars automatically, with catalog photometry from Gaia DR3. This script instead uses the official AAVSO VSP sequence and its chart ID, which keeps measurements consistent with other observers in AAVSO campaigns.
 
 ---
 
