@@ -35,7 +35,7 @@ The dialog is a six-step wizard — Setup → Comp Stars → Photometry → Mid-
 
 ## Requirements
 
-- **PixInsight 1.9.4 "Lockhart"** or later (V8 JS engine required); tested with PixInsight 1.9.5 build 1706 on macOS (arm64)
+- **PixInsight 1.9.4 "Lockhart"** or later (V8 JS engine required); tested with PixInsight 1.9.5 build 1706 and 1.9.6 build 1713 on macOS (arm64)
 - An open, plate-solved OSC (one-shot colour) RGB master light stack, debayered in PixInsight
 - The target's AAVSO (VSX) name, e.g. `T CrB` — or its J2000 coordinates
 - An internet connection (the comparison stars are downloaded from [AAVSO VSP](https://www.aavso.org/vsp))
@@ -220,7 +220,7 @@ outburst begins — monitor [aavso.org/news](https://www.aavso.org/news).
 
 ## PixInsight 1.9.6 compatibility
 
-> **Status: not yet tested.** PixInsight 1.9.6 "Lockhart" (build 1713) was released in October 2026. The script has been reviewed against the [1.9.6 release notes](https://pixinsight.net/dev/index.php?articles/pixinsight-1-9-6-lockhart-released.28/), but it has not yet been run under 1.9.6. Until tests are complete, PixInsight 1.9.5 build 1706 remains the verified version.
+> **Status: tested.** PixInsight 1.9.6 "Lockhart" (build 1713) was released in October 2026. The script has been reviewed against the [1.9.6 release notes](https://pixinsight.net/dev/index.php?articles/pixinsight-1-9-6-lockhart-released.28/) and tested under 1.9.6 on macOS (arm64). It runs without modifications.
 
 A code review against the 1.9.6 breaking changes found no required modifications:
 
@@ -229,11 +229,11 @@ A code review against the 1.9.6 breaking changes found no required modifications
 - **Moon phase:** 1.9.6 fixes a PJSR bug that reported the Moon's phase angle as always about zero. The script does not depend on it, because it computes the lunar illumination itself.
 - **Minimum version:** The script still requires 1.9.4 or later. It does not use any 1.9.6-only API.
 
-Points to verify in testing:
+Test results:
 
-- **Contained windowing mode** (now the default): pressing Return in a hosted dialog triggers its default button. Check that Return in the Object, Start, End and Mid-time fields does not unintentionally advance or close the wizard. If it does, set `autoDefaultButton = false` on the dialog.
-- **DynamicPSF:** PSF fitting was reworked. Fits now start from the measured peak and width of each star, and a bug that let fits of bright stars converge to the wings has been fixed. Compare TG/TB results for the same stack under 1.9.5 and 1.9.6 to rule out a systematic offset in the light curve.
-- **FITS WCS:** 1.9.6 fixes WCS keywords that were read as mirrored solutions for half of all rotation angles. Stacks that were plate-solved by other software and loaded from FITS should now project correctly. Re-check the Verification step.
+- **Contained windowing mode** (now the default): in a hosted dialog, Return triggers the default button. Return in the Object, Start, End and Mid-time fields does not advance or close the wizard, with contained windowing mode both enabled and disabled.
+- **DynamicPSF:** PSF fitting was reworked. Fits now start from the measured peak and width of each star, and a bug that let fits of bright stars converge to the wings has been fixed. An SS Cyg stack (2026-10-28, Seestar S30 Pro) gave identical results under 1.9.5 and 1.9.6: TG 11.636 ± 0.032, TB 12.374 ± 0.055, same comp stars and check star values. Bright, near-saturated stars, where the fix matters most, have not been compared yet.
+- **FITS WCS** (not tested): 1.9.6 fixes WCS keywords that were read as mirrored solutions for half of all rotation angles. This only affects stacks that were plate-solved by other software and loaded from FITS. They should now project correctly. Check the Verification step if you use such stacks.
 
 Relevant 1.9.6 improvements for this workflow:
 

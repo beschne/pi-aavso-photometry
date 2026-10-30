@@ -20,7 +20,7 @@ them externally.
   do not add `import`/`pip`/`npm`, do not assume Node.js. Only the PJSR core and
   PixInsight's bundled `#include <pjsr/...>` libraries are available.
 - Target: **PixInsight 1.9.4 "Lockhart" on macOS (Apple Silicon)** (minimum version);
-  tested with 1.9.5 build 1706 (2026-09-27). 1.9.6 (build 1713) not yet tested.
+  tested with 1.9.5 build 1706 (2026-09-27) and 1.9.6 build 1713 (2026-10-29).
 - **JS engine: Google V8** (changed from SpiderMonkey 24 in 1.9.4). Modern ES6+
   features are available; do not assume SpiderMonkey 24 limitations or quirks.
 - No external dependencies of any kind. If a capability seems to need one, it almost
